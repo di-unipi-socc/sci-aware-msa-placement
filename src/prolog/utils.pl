@@ -1,4 +1,3 @@
-% Set up interpreter.
 :- dynamic of/2, mf/2.
 :- dynamic maxOF/1, minOF/1.
 :- dynamic maxMF/1, minMF/1.

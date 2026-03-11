@@ -1,16 +1,23 @@
-from swiplserver import PrologMQI
+import argparse
+import os
 import random as rnd
-from data import FactoryNode, NodeT, Microservice, ModeEnv
-import argparse, os, re, sys, json
-from typing import Tuple, List, Optional
+import re
+import sys
+from typing import List, Optional, Tuple
 
-JSON_FILE_PATH = "testing_settings.json"
-with open(JSON_FILE_PATH, 'r') as file:
-        json_data = json.load(file)
-GENERATED_INFRASTRUCTURE_DIRECTORY = json_data['GENERATED_INFRASTRUCTURE_DIRECTORY']
-APPLICATION_DIRECTORY = json_data['APPLICATION_DIRECTORY']
+from data import FactoryNode, Microservice, ModeEnv, NodeT
+from settings import INFRA_DIR
+from swiplserver import PrologMQI
 
-def getParameters() -> Tuple[Optional[str], Optional[str], List[int], Optional['ModeEnv'], Optional[int], bool]:
+
+def getParameters() -> Tuple[
+    Optional[str],
+    Optional[str],
+    List[int],
+    Optional["ModeEnv"],
+    Optional[int],
+    bool,
+]:
     """Parses and returns the command-line arguments for generating infrastructures.
 
     Returns:
@@ -25,21 +32,43 @@ def getParameters() -> Tuple[Optional[str], Optional[str], List[int], Optional['
     Raises:
         SystemExit: If required arguments are missing when --clean is not specified.
     """
-    prsr = argparse.ArgumentParser(description='Run experiments')
-    prsr.add_argument('--infraDir', type=str, help='Infrastructure directory', default=GENERATED_INFRASTRUCTURE_DIRECTORY)
-    prsr.add_argument('--appFile', type=str, help='Application file directory')
-    prsr.add_argument('--mode', type=str, choices=['random', 'curated'], help='Mode of operation: rnd (Random/Realistic) or crtd (Curated)')
-    prsr.add_argument('--seed', type=int, help='Seed value')
-    prsr.add_argument('--clean', action='store_true', help='Clean the testing directory')
-    prsr.add_argument('args', type=str, help='String of integers')
+    prsr = argparse.ArgumentParser(description="Run experiments")
+    prsr.add_argument(
+        "--infraDir",
+        type=str,
+        help="Infrastructure directory",
+        default=INFRA_DIR,
+    )
+    prsr.add_argument("--appFile", type=str, help="Application file directory")
+    prsr.add_argument(
+        "--mode",
+        type=str,
+        choices=["random", "curated"],
+        help="Mode of operation: rnd (Random/Realistic) or crtd (Curated)",
+    )
+    prsr.add_argument("--seed", type=int, help="Seed value")
+    prsr.add_argument(
+        "--clean", action="store_true", help="Clean the testing directory"
+    )
+    prsr.add_argument("args", type=str, help="String of integers")
     prsdArgs = prsr.parse_args()
     modeEnv = ModeEnv[prsdArgs.mode.upper()]
 
     if modeEnv == ModeEnv.CURATED and not prsdArgs.appFile:
-        prsr.error("The application file (appFile) must be specified to generate the curated environment.")
+        prsr.error(
+            "The application file (appFile) must be specified "
+            "to generate the curated environment."
+        )
 
     args_list = [int(x) for x in prsdArgs.args.split() if x]
-    return prsdArgs.appFile, prsdArgs.infraDir, args_list, modeEnv, prsdArgs.seed, prsdArgs.clean
+    return (
+        prsdArgs.appFile,
+        prsdArgs.infraDir,
+        args_list,
+        modeEnv,
+        prsdArgs.seed,
+        prsdArgs.clean,
+    )
 
 
 def cleanDirectory(dir: str):
@@ -62,10 +91,12 @@ def cleanDirectory(dir: str):
         print(f"Failed to delete: {fpath}. Reason: {e}")
 
 
-class Env():
+class Env:
     """Abstract base class for environment generation."""
 
-    def __init__(self, mode: ModeEnv, numNodes: int, infraDirectory: str, appFile: str = None):
+    def __init__(
+        self, mode: ModeEnv, numNodes: int, infraDirectory: str, appFile: str = None
+    ):
         """Initializes the Env class with the specified parameters.
 
         Args:
@@ -82,7 +113,9 @@ class Env():
         self._mode = mode
         self._appFile = appFile
 
-    def _generateNodes(self, numNodes: int, nodeT: NodeT, microservice: Microservice = None):
+    def _generateNodes(
+        self, numNodes: int, nodeT: NodeT, microservice: Microservice = None
+    ):
         """Generates nodes and their carbon intensities.
 
         Args:
@@ -118,7 +151,9 @@ class Env():
         if self._mode == ModeEnv.RANDOM:
             return RndEnv(self._numNodes, self._infraDirectory).generate()
         elif self._mode == ModeEnv.CURATED:
-            return CrtdEnv(self._numNodes, self._infraDirectory, self._appFile).generate()
+            return CrtdEnv(
+                self._numNodes, self._infraDirectory, self._appFile
+            ).generate()
         else:
             raise Exception("Invalid mode.")
 
@@ -129,7 +164,7 @@ class CrtdEnv(Env):
     Inherits from the Env class and generates a curated environment with the specified number of nodes.
     """
 
-    def __init__(self, numNodes: int, infraDirectory:str, appFile: str):
+    def __init__(self, numNodes: int, infraDirectory: str, appFile: str):
         """Initializes the CrtdEnv class with the specified parameters.
 
         Args:
@@ -164,20 +199,28 @@ class CrtdEnv(Env):
         msList = []
         with PrologMQI().create_thread() as prolog_thread:
             prolog_thread.query(f"consult('{self._appFile}')")
-            msNameList = prolog_thread.query(f"application(A, MS, EPs).")[0]['MS']
+            msNameList = prolog_thread.query(f"application(A, MS, EPs).")[0]["MS"]
             if self._numNodes < len(msNameList):
-                print(f"Number of nodes ({self._numNodes}) must be greater than the number of microservices ({len(msNameList)}).")
+                print(
+                    f"Number of nodes ({self._numNodes}) must be greater than the number of microservices ({len(msNameList)})."
+                )
                 sys.exit(1)
             k = self._numNodes - len(msNameList)
             # --- Retrieves the microservices and their respective resource requirements and TiR and appends them to a list --- #
             for msName in msNameList:
-                ms = prolog_thread.query(f"microservice({msName}, rr(CPU, RAM, BWIN, BWOUT), TiR).")[0]
-                ms = Microservice(msName, ms['CPU'], ms['RAM'], ms['BWIN'], ms['BWOUT'], ms['TiR'])
+                ms = prolog_thread.query(
+                    f"microservice({msName}, rr(CPU, RAM, BWIN, BWOUT), TiR)."
+                )[0]
+                ms = Microservice(
+                    msName, ms["CPU"], ms["RAM"], ms["BWIN"], ms["BWOUT"], ms["TiR"]
+                )
                 msList.append(ms)
             # --- Generates BROKEN and DIRTY nodes and their respective carbon intensities --- #
             for _ in range(int(k / 2)):
                 randMs = rnd.choice(msList)
-                brokenNode, brokenIntensity = self._generateNodes(1, NodeT.BROKEN, randMs)
+                brokenNode, brokenIntensity = self._generateNodes(
+                    1, NodeT.BROKEN, randMs
+                )
                 dirtyNode, dirtyIntensity = self._generateNodes(1, NodeT.DIRTY, randMs)
                 nodes += dirtyNode + brokenNode
                 intensities += dirtyIntensity + brokenIntensity
@@ -186,7 +229,7 @@ class CrtdEnv(Env):
                 fitNode, fitIntensity = self._generateNodes(1, NodeT.FIT, ms)
                 match = re.search(r"node\('([^']+)'", fitNode).group(1)
                 # --- Saves the optimal packing solution by appending it to the list --- #
-                self.__optimal.append({'Ms': ms.name, 'N': match})
+                self.__optimal.append({"Ms": ms.name, "N": match})
                 nodes += fitNode
                 intensities += fitIntensity
             if not os.path.exists(infraDirectory):
@@ -202,7 +245,7 @@ class RndEnv(Env):
     Inherits from the Env class and generates a random environment with the specified number of nodes.
     """
 
-    def __init__(self, numNodes: int, infraDirectory:str):
+    def __init__(self, numNodes: int, infraDirectory: str):
         """Initializes the RndEnv class with the specified parameters.
 
         Args:
@@ -232,7 +275,7 @@ with PrologMQI() as mqi:
 
     if clean:
         cleanDirectory(infraDirectory)
-    
+
     if seed is not None:
         rnd.seed(seed)
 

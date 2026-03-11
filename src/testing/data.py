@@ -1,39 +1,26 @@
-from enum import Enum
 import random
+from enum import Enum
 from typing import Union
 
 EMISSIONS = [
-    {
-        "name": "onshorewind",
-        "emission": 0.0097
-    },
-    {
-        "name": "offshorewind",
-        "emission": 0.0165
-    },
-    {
-        "name": "solar",
-        "emission": 0.05
-    },
-    {
-        "name": "gas",
-        "emission": 0.610
-    },
-    {
-        "name": "coal",
-        "emission": 1.1
-    }
+    {"name": "onshorewind", "emission": 0.0097},
+    {"name": "offshorewind", "emission": 0.0165},
+    {"name": "solar", "emission": 0.05},
+    {"name": "gas", "emission": 0.610},
+    {"name": "coal", "emission": 1.1},
 ]
 
 FITPUE = 1.1
-FITCI = EMISSIONS[1]['emission']
+FITCI = EMISSIONS[1]["emission"]
 CLEAN_PUE = 1.05
-CLEAN_CI = EMISSIONS[0]['emission']
+CLEAN_CI = EMISSIONS[0]["emission"]
 DIRTY_PUE = 3.0
-DIRTY_CI = EMISSIONS[len(EMISSIONS)-1]['emission']
+DIRTY_CI = EMISSIONS[len(EMISSIONS) - 1]["emission"]
+
 
 class NodeS(Enum):
     """Enumeration for different sizes of nodes."""
+
     NANO = 0
     MICRO = 1
     SMALL = 2
@@ -42,15 +29,18 @@ class NodeS(Enum):
     XLARGE = 5
     X2LARGE = 6
 
+
 class NodeT(Enum):
     """Enumeration for different types of nodes.
 
     The RANDOM node is for generating random realistic nodes, while the others are for the curated environment.
     """
+
     RANDOM = 0
     FIT = 1
     BROKEN = 2
     DIRTY = 3
+
 
 class Node:
     """Class representing a node.
@@ -67,7 +57,20 @@ class Node:
         pue (float): Power usage effectiveness.
         i (float): Carbon intensity.
     """
-    def __init__(self, name:str, ncpu:int, ram:float, bwin:float, bwout:float, e:float, el:float, te:float, pue:float, i:float):
+
+    def __init__(
+        self,
+        name: str,
+        ncpu: int,
+        ram: float,
+        bwin: float,
+        bwout: float,
+        e: float,
+        el: float,
+        te: float,
+        pue: float,
+        i: float,
+    ):
         self.name = name
         self.ncpu = ncpu
         self.ram = ram
@@ -78,8 +81,10 @@ class Node:
         self.te = te
         self.pue = pue
         self.i = i
+
     def __str__(self):
-        return f'Node: {self.name}, tor({self.ncpu},{self.ram},{self.bwin},{self.bwout}), {self.e}, {self.el}, {self.te}, {self.pue}'
+        return f"Node: {self.name}, tor({self.ncpu},{self.ram},{self.bwin},{self.bwout}), {self.e}, {self.el}, {self.te}, {self.pue}"
+
 
 class Microservice:
     """Class representing a microservice.
@@ -92,15 +97,20 @@ class Microservice:
         bwout (float): Bandwidth out.
         tir (float): Time in running.
     """
-    def __init__(self, name:str, ncpu:int, ram:float, bwin:float, bwout, tir:float):
+
+    def __init__(
+        self, name: str, ncpu: int, ram: float, bwin: float, bwout, tir: float
+    ):
         self.name = name
         self.ncpu = ncpu
         self.ram = ram
         self.bwin = bwin
         self.bwout = bwout
         self.tir = tir
+
     def __str__(self):
-        return f'Microservice: {self.name}, rr({self.ncpu},{self.ram},{self.bwin},{self.bwout}), {self.tir}'
+        return f"Microservice: {self.name}, rr({self.ncpu},{self.ram},{self.bwin},{self.bwout}), {self.tir}"
+
 
 class FactoryNode:
     """Factory class for generating nodes.
@@ -109,11 +119,12 @@ class FactoryNode:
         numNodesS (list): List to keep track of the number of nodes generated for each size.
         numNodesT (list): List to keep track of the number of nodes generated for each type.
     """
+
     numNodesS = [0] * len(NodeS)
     numNodesT = [0] * len(NodeT)
 
     @staticmethod
-    def node(node: Union[NodeS, NodeT], ms:Microservice=None):
+    def node(node: Union[NodeS, NodeT], ms: Microservice = None):
         """Generates a node of the specified type.
 
         Args:
@@ -133,7 +144,6 @@ class FactoryNode:
         else:
             raise Exception("Invalid node type.")
 
-    
     @staticmethod
     def __randNode() -> Node:
         """Generates a random node of class `Node`.
@@ -143,10 +153,10 @@ class FactoryNode:
         """
         randNum = random.randint(0, len(NodeS) - 3)
         node = FactoryNode.node(NodeS(randNum))
-        return node    
+        return node
 
     @staticmethod
-    def __nodeT(nodeType:NodeT, ms:Microservice=None) -> Node:
+    def __nodeT(nodeType: NodeT, ms: Microservice = None) -> Node:
         """Generates a node of the specified type `NodeT`.
 
         Args:
@@ -170,23 +180,56 @@ class FactoryNode:
             case NodeT.FIT:
                 if ms is None:
                     raise Exception("Microservice not provided.")
-                return Node("f_" + numNode, ms.ncpu, ms.ram, ms.bwin, ms.bwout, 0.015, 3, 1000, FITPUE, FITCI)
+                return Node(
+                    "f_" + numNode,
+                    ms.ncpu,
+                    ms.ram,
+                    ms.bwin,
+                    ms.bwout,
+                    0.015,
+                    3,
+                    1000,
+                    FITPUE,
+                    FITCI,
+                )
             case NodeT.DIRTY:
                 if ms is None:
                     raise Exception("Microservice not provided.")
-                return Node("d_" + numNode, ms.ncpu, ms.ram, ms.bwin, ms.bwout, e, el, te, DIRTY_PUE, DIRTY_CI)
+                return Node(
+                    "d_" + numNode,
+                    ms.ncpu,
+                    ms.ram,
+                    ms.bwin,
+                    ms.bwout,
+                    e,
+                    el,
+                    te,
+                    DIRTY_PUE,
+                    DIRTY_CI,
+                )
             case NodeT.BROKEN:
                 if ms is None:
                     raise Exception("Microservice not provided.")
                 specs = {0: ms.ncpu, 1: ms.ram, 2: ms.bwin, 3: ms.bwout}
-                broken_spec = random.randint(0, len(specs)-1)
+                broken_spec = random.randint(0, len(specs) - 1)
                 specs[broken_spec] = 0
-                return Node("b_" + numNode, specs[0], specs[1], specs[2], specs[3], 0.015, 3, 1000, CLEAN_PUE, CLEAN_CI)
+                return Node(
+                    "b_" + numNode,
+                    specs[0],
+                    specs[1],
+                    specs[2],
+                    specs[3],
+                    0.015,
+                    3,
+                    1000,
+                    CLEAN_PUE,
+                    CLEAN_CI,
+                )
             case _:
                 raise Exception("Invalid node type.")
-            
+
     @staticmethod
-    def __nodeS(nodeType:NodeS) -> Node:
+    def __nodeS(nodeType: NodeS) -> Node:
         """Generates a node of the specified size `NodeS`.
 
         Args:
@@ -211,7 +254,7 @@ class FactoryNode:
             case NodeS.SMALL:
                 e = random.uniform(0.01, 0.015)
                 return Node("s_" + numNode, 2, 2, 5, 5, e, el, te, pue, i)
-            case NodeS.MEDIUM: 
+            case NodeS.MEDIUM:
                 e = random.uniform(0.015, 0.025)
                 return Node("m_" + numNode, 2, 4, 12.5, 12.5, e, el, te, pue, i)
             case NodeS.LARGE:
@@ -225,8 +268,8 @@ class FactoryNode:
                 return Node("xl2_" + numNode, 8, 32, 15, 15, e, el, te, pue, i)
             case _:
                 raise Exception("Invalid node type.")
-            
-    @staticmethod  
+
+    @staticmethod
     def resetNumNodesS():
         """Resets the number of nodes generated for each type of node."""
         FactoryNode.numNodesS = [0] * len(NodeS)
@@ -236,6 +279,7 @@ class FactoryNode:
         """Resets the number of nodes generated for each type of node."""
         FactoryNode.numNodesT = [0] * len(NodeT)
 
+
 class ModeEnv(Enum):
     """Enumeration for different modes of node generation.
 
@@ -243,8 +287,10 @@ class ModeEnv(Enum):
         OPT (int): Random realistic mode.
         CRTD (int): Curated mode.
     """
+
     RANDOM = 0
     CURATED = 1
+
 
 class ModeTest(Enum):
     """Enumeration for different placement modes.
@@ -256,6 +302,7 @@ class ModeTest(Enum):
         LINEARCOMBINATION (int): Heuristic search, linear combination configuration
         BASE (int): Base search.
     """
+
     EXHAUSTIVE = 0
     GREENONLY = 1
     CAPACITYONLY = 2

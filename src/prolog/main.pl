@@ -90,10 +90,7 @@ scores(N,CS,RS,WS) :- carbonScore(N,CS), resourceScore(node,N,RS), weightedScore
 resourceScore(microservice,Ms,RS) :- microservice(Ms,rr(CPU, RAM, BWIn, BWOut),_), resourceScore(Ms, CPU, RAM, BWIn, BWOut, RS).
 resourceScore(node,N,RS) :- node(N,tor(CPU, RAM, BWIn, BWOut),_,_,_,_), resourceScore(N, CPU, RAM, BWIn, BWOut, RS).
 
-weightedScore(N,CS,RS,WS) :- 
-    node(N,_,_,_,_,_),
-    WS is (0.5 * CS) + (0.5 * RS), 
-    assert(ws(N,WS)).
+weightedScore(N,CS,RS,WS) :- node(N,_,_,_,_,_), WS is (0.5 * CS) + (0.5 * RS), assert(ws(N,WS)).
 
 eligiblePlacement(LstMs, LstN, P) :- eligiblePlacement(LstMs, LstN, [], P).
 eligiblePlacement(LstMs, P) :- eligible(LstMs, [], P).
