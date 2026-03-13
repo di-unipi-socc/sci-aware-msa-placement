@@ -21,7 +21,6 @@ def sci_aware(config: dict) -> dict:
     cfg = config["experiment"]
 
     with TemporaryDirectory() as temp_dir:
-        print(temp_dir)
         experiment = Experiment(
             application_name=cfg["application"],
             infrastructure_size=cfg["infrastructure_size"],

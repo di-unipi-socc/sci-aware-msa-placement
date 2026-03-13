@@ -30,6 +30,10 @@ skip = ["__init__.py"]
 [dependency-groups]
 dev = ["ruff (>=0.15.6,<0.16.0)", "isort (>=8.0.1,<9.0.0)"]
 
+
+[tool.poetry.group.dev]
+optional = true
+
 [tool.poetry.scripts]
 sci-aware = "sci_aware_msa_placement.main:main"
 debug = "sci_aware_msa_placement.main:debug_main"
