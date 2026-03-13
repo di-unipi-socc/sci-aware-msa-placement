@@ -19,9 +19,6 @@ dependencies = [
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry]
-package-mode = false
-
 [tool.isort]
 profile = "black"
 multi_line_output = 3
@@ -29,3 +26,10 @@ include_trailing_comma = true
 force_grid_wrap = 2
 filter_files = true
 skip = ["__init__.py"]
+
+[dependency-groups]
+dev = ["ruff (>=0.15.6,<0.16.0)", "isort (>=8.0.1,<9.0.0)"]
+
+[tool.poetry.scripts]
+sci-aware = "sci_aware_msa_placement.main:main"
+debug = "sci_aware_msa_placement.main:debug_main"

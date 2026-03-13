@@ -216,5 +216,6 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Custom
+*.DS_Store
 /output
-/resources/infrastructures/
+/data/infrastructures

@@ -1,0 +1,82 @@
+target-version = "py312"
+
+include = ["sci_aware_msa_placement/**/*.py"]
+line-length = 88
+indent-width = 4
+
+exclude = [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "build",
+    "dist",
+    "tests",
+    "examples",
+    "docs",
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+skip-magic-trailing-comma = false
+
+[lint]
+select = [
+    "E",
+    "F",
+    "W",
+    # "I", # isort works better so far
+    "B",
+    "UP",
+    "SIM",
+    "C90",
+    "RUF",
+    "TCH",
+    "PL",
+    "ARG",
+    # "D",
+]
+
+ignore = [
+    "D203",
+    "D213",
+    "D100",
+    "D104",
+    "E501",
+    "PLC0415",
+    "UP006",
+    "UP007",
+    "UP008",
+    "UP035",
+    "UP045",
+]
+
+fixable = ["ALL"]
+unfixable = ["UP045", "UP035"]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.pylint]
+max-args = 20
+max-locals = 30
+max-branches = 15
+max-positional-args = 20
+
+[lint.pycodestyle]
+max-doc-length = 100
+max-line-length = 88
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.flake8-type-checking]
+strict = true
+
+[lint.per-file-ignores]
+"**/__init__.py" = ["I001"] # allow re-exported symbols
+"tests/**" = ["D"]
