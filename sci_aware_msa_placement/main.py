@@ -36,7 +36,7 @@ def sci_aware(config: dict) -> dict:
 
 def main() -> Path:
     if not ray.is_initialized():
-        ray.init()
+        ray.init(address="auto")
 
     tuner = tune.Tuner(
         sci_aware,
