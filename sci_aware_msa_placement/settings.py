@@ -9,7 +9,6 @@ APP_DIR = DATA_DIR / "applications"
 INFRA_DIR = DATA_DIR / "infrastructures"
 
 CSV_DIR = OUTPUT_DIR / "csv"
-PARQUET_DIR = OUTPUT_DIR / "parquet"
 PLOTS_DIR = OUTPUT_DIR / "plots"
 
 PL_SUFFIX = ".pl"
@@ -57,16 +56,3 @@ PLACEMENT_ARITY = 2
 CURATED_EXTRA_NODE_PAIR_SIZE = 2
 
 TIMEOUT = 900
-SIZES = [2**i for i in range(4, 21)]
-SEEDS = [
-    123457,
-    654323,
-    987652,
-    567895,
-    698081,
-    123456,
-    654321,
-    987654,
-    567890,
-    698087,
-]

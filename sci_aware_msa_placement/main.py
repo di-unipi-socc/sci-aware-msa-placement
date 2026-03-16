@@ -13,7 +13,7 @@ from sci_aware_msa_placement.models import (
 from sci_aware_msa_placement.search_space import get_search_space
 from sci_aware_msa_placement.settings import (
     EXPERIMENT_NAME,
-    PARQUET_DIR,
+    OUTPUT_DIR,
 )
 
 
@@ -43,15 +43,15 @@ def main() -> Path:
         param_space=get_search_space(),
         run_config=RunConfig(
             name=EXPERIMENT_NAME,
-            storage_path=str(PARQUET_DIR),
+            storage_path=str(OUTPUT_DIR),
         ),
     )
 
     results = tuner.fit()
     dataframe = results.get_dataframe()
 
-    PARQUET_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = PARQUET_DIR / f"{EXPERIMENT_NAME}.parquet"
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = OUTPUT_DIR / f"{EXPERIMENT_NAME}.parquet"
 
     dataframe.to_parquet(output_path, index=False)
     print(f"Saved results to: {output_path}")

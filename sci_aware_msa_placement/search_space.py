@@ -9,20 +9,19 @@ TIMEOUT = 900
 
 APPLICATIONS = ["demo", "online-boutique"]
 
-# INFRASTRUCTURE_SIZES = [2**i for i in range(3, 11)]
-INFRASTRUCTURE_SIZES = [2**i for i in range(3, 4)]
+INFRASTRUCTURE_SIZES = [2**i for i in range(3, 11)]
 
 SEEDS = [
     123457,
-    # 654321,
-    # 987652,
-    # 567895,
-    # 698081,
-    # 123456,
-    # 654321,
-    # 987654,
-    # 567890,
-    # 698087,
+    654321,
+    987652,
+    567895,
+    698081,
+    123456,
+    654321,
+    987654,
+    567890,
+    698087,
 ]
 
 COMMON_HEURISTICS = [

@@ -101,7 +101,6 @@ class Experiment:
             self._consult_files(prolog, infra_path)
             prolog.query_async(self._placement_query(builder), find_all=False)
             raw_result = prolog.query_async_result()
-            print(raw_result)
 
         return self._normalize_result(parse_prolog(raw_result))
 
