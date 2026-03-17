@@ -174,37 +174,37 @@ class FactoryNode:
             raise ValueError("Microservice not provided.")
 
         if node_type is NodeType.FIT:
-            profile = cls.FIT_PROFILE
+            # profile = cls.FIT_PROFILE
             return Node(
                 name=f"f_{name_id}",
                 ncpu=ms.ncpu,
                 ram=ms.ram,
                 bwin=ms.bwin,
                 bwout=ms.bwout,
-                e=0.2,
+                e=random.uniform(0.15, 0.3),
                 el=3,
                 te=1500,
-                pue=profile.pue,
-                ci=profile.ci,
+                pue=random.uniform(1.1, 1.2),
+                ci=random.uniform(0.2, 0.5),
             )
 
         if node_type is NodeType.DIRTY:
-            profile = cls.DIRTY_PROFILE
+            # profile = cls.DIRTY_PROFILE
             return Node(
                 name=f"d_{name_id}",
                 ncpu=ms.ncpu * random.randint(1, 2),
                 ram=ms.ram * random.randint(1, 2),
                 bwin=ms.bwin * random.randint(1, 2),
                 bwout=ms.bwout * random.randint(1, 2),
-                e=0.5,
+                e=random.uniform(0.4, 0.6),
                 el=2,
                 te=2000,
-                pue=profile.pue,
-                ci=profile.ci,
+                pue=random.uniform(2, 2.5),
+                ci=random.uniform(0.5, 0.8),
             )
 
         if node_type is NodeType.BROKEN:
-            profile = cls.CLEAN_PROFILE
+            # profile = cls.CLEAN_PROFILE
             specs = [ms.ncpu, ms.ram, ms.bwin, ms.bwout]
             specs[random.randint(0, len(specs) - 1)] = 0
 
@@ -214,11 +214,11 @@ class FactoryNode:
                 ram=specs[1],
                 bwin=specs[2],
                 bwout=specs[3],
-                e=0.015,
+                e=random.uniform(0.05, 0.1),
                 el=7,
                 te=1000,
-                pue=profile.pue,
-                ci=profile.ci,
+                pue=random.uniform(1.05, 1.1),
+                ci=random.uniform(0.03, 0.1),
             )
 
         raise ValueError("Invalid node type.")

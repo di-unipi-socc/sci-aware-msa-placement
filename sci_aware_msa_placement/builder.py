@@ -77,6 +77,7 @@ class Builder:
 
     def _build_random(self) -> str:
         nodes = [FactoryNode.node(NodeType.RANDOM) for _ in range(self.n)]
+        random.shuffle(nodes)
         return self._serialize(nodes)
 
     def _build_curated(self) -> str:
