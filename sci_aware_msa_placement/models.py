@@ -81,8 +81,8 @@ class FactoryNode:
     num_nodes_s: ClassVar[list[int]] = [0] * len(NodeSize)
     num_nodes_t: ClassVar[list[int]] = [0] * len(NodeType)
 
-    FIT_PROFILE: ClassVar[NodeProfile] = NodeProfile(pue=1.1, ci=0.0165)
-    CLEAN_PROFILE: ClassVar[NodeProfile] = NodeProfile(pue=1.05, ci=0.0097)
+    FIT_PROFILE: ClassVar[NodeProfile] = NodeProfile(pue=1.1, ci=0.1)
+    CLEAN_PROFILE: ClassVar[NodeProfile] = NodeProfile(pue=1.05, ci=0.03)
     DIRTY_PROFILE: ClassVar[NodeProfile] = NodeProfile(pue=3.0, ci=1.1)
 
     SIZE_CONFIG: ClassVar[
@@ -181,9 +181,9 @@ class FactoryNode:
                 ram=ms.ram,
                 bwin=ms.bwin,
                 bwout=ms.bwout,
-                e=0.015,
+                e=0.2,
                 el=3,
-                te=1000,
+                te=1500,
                 pue=profile.pue,
                 ci=profile.ci,
             )
@@ -192,13 +192,13 @@ class FactoryNode:
             profile = cls.DIRTY_PROFILE
             return Node(
                 name=f"d_{name_id}",
-                ncpu=ms.ncpu,
-                ram=ms.ram,
-                bwin=ms.bwin,
-                bwout=ms.bwout,
-                e=random.uniform(0.020, 0.025),
-                el=random.randint(4, 7),
-                te=random.randint(1100, 2000),
+                ncpu=ms.ncpu * random.randint(1, 2),
+                ram=ms.ram * random.randint(1, 2),
+                bwin=ms.bwin * random.randint(1, 2),
+                bwout=ms.bwout * random.randint(1, 2),
+                e=0.5,
+                el=2,
+                te=2000,
                 pue=profile.pue,
                 ci=profile.ci,
             )
@@ -215,7 +215,7 @@ class FactoryNode:
                 bwin=specs[2],
                 bwout=specs[3],
                 e=0.015,
-                el=3,
+                el=7,
                 te=1000,
                 pue=profile.pue,
                 ci=profile.ci,

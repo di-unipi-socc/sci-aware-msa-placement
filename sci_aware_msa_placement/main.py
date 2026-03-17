@@ -58,16 +58,17 @@ def main() -> Path:
 
 
 def debug_main():
-    result = sci_aware(
-        {
-            "experiment": {
-                "application": "demo",
-                "infrastructure_size": 16,
-                "mode": ModeEnv.RANDOM,
-                "heuristic": ModeTest.EXHAUSTIVE,
-                "seed": 42,
-                "timeout": 5,
+    for h in [ModeTest.GREENONLY, ModeTest.CAPACITYONLY, ModeTest.LINEARCOMBINATION]:
+        result = sci_aware(
+            {
+                "experiment": {
+                    "application": "online-boutique",
+                    "infrastructure_size": 2**20,
+                    "mode": ModeEnv.CURATED,
+                    "heuristic": h,
+                    "seed": 42,
+                    "timeout": 600,
+                }
             }
-        }
-    )
-    print(result)
+        )
+        print(result)
