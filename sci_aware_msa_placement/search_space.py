@@ -9,7 +9,7 @@ TIMEOUT = 900
 
 APPLICATIONS = ["demo", "online-boutique"]
 
-INFRASTRUCTURE_SIZES = [2**i for i in range(3, 11)]
+INFRASTRUCTURE_SIZES = [2**i for i in range(5, 21)]
 
 SEEDS = [
     123457,
