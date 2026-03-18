@@ -13,7 +13,7 @@ PLOTS_DIR = OUTPUT_DIR / "plots"
 
 PL_SUFFIX = ".pl"
 ENCODING = "utf-8"
-EXPERIMENT_NAME = "sci-aware-2"
+EXPERIMENT_NAME = "sci-aware-3"
 
 MAIN_PL = PROLOG_DIR / f"main{PL_SUFFIX}"
 

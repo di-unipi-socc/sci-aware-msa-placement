@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -35,6 +36,7 @@ def sci_aware(config: dict) -> dict:
 
 
 def main() -> Path:
+    start_time = time.time()
     if not ray.is_initialized():
         ray.init(address="auto")
 
@@ -55,6 +57,7 @@ def main() -> Path:
 
     dataframe.to_parquet(output_path, index=False)
     print(f"Saved results to: {output_path}")
+    print(f"Total execution time: {time.time() - start_time:.4f} seconds")
 
 
 def debug_main():
