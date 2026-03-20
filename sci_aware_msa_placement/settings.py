@@ -4,7 +4,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 PROLOG_DIR = PROJECT_ROOT / "prolog"
-
+RESULTS_DIR = PROJECT_ROOT / "results"
+PARQUETS_DIR = RESULTS_DIR / "parquets"
 APP_DIR = DATA_DIR / "applications"
 INFRA_DIR = DATA_DIR / "infrastructures"
 
