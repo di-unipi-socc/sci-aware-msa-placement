@@ -5,13 +5,13 @@ from typing import ClassVar, Union
 
 
 class NodeSize(IntEnum):
-    NANO = 0
-    MICRO = 1
-    SMALL = 2
-    MEDIUM = 3
-    LARGE = 4
-    XLARGE = 5
-    X2LARGE = 6
+    # NANO = 0
+    # MICRO = 1
+    SMALL = 0
+    MEDIUM = 1
+    LARGE = 2
+    # XLARGE = 5
+    # X2LARGE = 6
 
 
 class NodeType(IntEnum):
@@ -88,36 +88,36 @@ class FactoryNode:
     SIZE_CONFIG: ClassVar[
         dict[NodeSize, dict[str, float | int | str | tuple[float, float]]]
     ] = {
-        NodeSize.NANO: {
-            "prefix": "n_",
-            "ncpu": 2,
-            "ram": 0.5,
-            "bwin": 5,
-            "bwout": 5,
-            "e_range": (0.001, 0.005),
-        },
-        NodeSize.MICRO: {
-            "prefix": "mi_",
-            "ncpu": 2,
-            "ram": 1,
-            "bwin": 5,
-            "bwout": 5,
-            "e_range": (0.005, 0.01),
-        },
+        # NodeSize.NANO: {
+        #     "prefix": "n_",
+        #     "ncpu": 2,
+        #     "ram": 0.5,
+        #     "bwin": 5,
+        #     "bwout": 5,
+        #     "e_range": (0.001, 0.005),
+        # },
+        # NodeSize.MICRO: {
+        #     "prefix": "mi_",
+        #     "ncpu": 2,
+        #     "ram": 1,
+        #     "bwin": 5,
+        #     "bwout": 5,
+        #     "e_range": (0.005, 0.01),
+        # },
         NodeSize.SMALL: {
             "prefix": "s_",
-            "ncpu": 2,
-            "ram": 2,
-            "bwin": 5,
-            "bwout": 5,
+            "ncpu": 1,
+            "ram": 1,
+            "bwin": 3,
+            "bwout": 3,
             "e_range": (0.01, 0.015),
         },
         NodeSize.MEDIUM: {
             "prefix": "m_",
             "ncpu": 2,
-            "ram": 4,
-            "bwin": 12.5,
-            "bwout": 12.5,
+            "ram": 2,
+            "bwin": 5,
+            "bwout": 5,
             "e_range": (0.015, 0.025),
         },
         NodeSize.LARGE: {
@@ -128,22 +128,22 @@ class FactoryNode:
             "bwout": 12.5,
             "e_range": (0.025, 0.04),
         },
-        NodeSize.XLARGE: {
-            "prefix": "xl_",
-            "ncpu": 4,
-            "ram": 16,
-            "bwin": 12.5,
-            "bwout": 12.5,
-            "e_range": (0.04, 0.06),
-        },
-        NodeSize.X2LARGE: {
-            "prefix": "xl2_",
-            "ncpu": 8,
-            "ram": 32,
-            "bwin": 15,
-            "bwout": 15,
-            "e_range": (0.06, 0.1),
-        },
+        # NodeSize.XLARGE: {
+        #     "prefix": "xl_",
+        #     "ncpu": 4,
+        #     "ram": 4,
+        #     "bwin": 10,
+        #     "bwout": 10,
+        #     "e_range": (0.04, 0.06),
+        # },
+        # NodeSize.X2LARGE: {
+        #     "prefix": "xl2_",
+        #     "ncpu": 8,
+        #     "ram": 32,
+        #     "bwin": 15,
+        #     "bwout": 15,
+        #     "e_range": (0.06, 0.1),
+        # },
     }
 
     @classmethod
