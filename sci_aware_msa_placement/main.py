@@ -41,11 +41,16 @@ def main() -> Path:
     if not ray.is_initialized():
         ray.init(address="auto")
 
+    exp_name = (
+        input(f"Enter experiment name (default: {EXPERIMENT_NAME}): ").strip()
+        or EXPERIMENT_NAME
+    )
+
     tuner = tune.Tuner(
         sci_aware,
         param_space=get_search_space(),
         run_config=RunConfig(
-            name=EXPERIMENT_NAME,
+            name=exp_name,
             storage_path=str(OUTPUT_DIR),
         ),
     )
@@ -53,7 +58,7 @@ def main() -> Path:
     results = tuner.fit()
     dataframe = results.get_dataframe()
 
-    output_path = PARQUETS_DIR / EXPERIMENT_NAME
+    output_path = PARQUETS_DIR / exp_name
     output_path.mkdir(parents=True, exist_ok=True)
     output_path = output_path / "raw-sci-aware.parquet"
 

@@ -12,6 +12,7 @@ from sci_aware_msa_placement.models import (
     ModeEnv,
     ModeTest,
 )
+from sci_aware_msa_placement.search_space import TIMEOUT
 from sci_aware_msa_placement.settings import (
     APP_DIR,
     INFRA_DIR,
@@ -20,9 +21,11 @@ from sci_aware_msa_placement.settings import (
     PLACEMENT_ARITY,
     PROLOG,
     RESULT_KEYS,
-    TIMEOUT,
 )
-from sci_aware_msa_placement.utils import application_path, parse_prolog
+from sci_aware_msa_placement.utils import (
+    application_path,
+    parse_prolog,
+)
 
 
 @dataclass(slots=True)

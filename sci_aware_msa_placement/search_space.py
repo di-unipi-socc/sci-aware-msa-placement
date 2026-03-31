@@ -5,7 +5,7 @@ from ray.tune import grid_search
 from sci_aware_msa_placement.models import ModeEnv, ModeTest
 
 
-TIMEOUT = 900
+TIMEOUT = 1800
 
 APPLICATIONS = ["demo", "online-boutique"]
 
@@ -47,7 +47,11 @@ def get_heuristics(mode: ModeEnv) -> list[ModeTest]:
     raise ValueError(f"Invalid mode: {mode}")
 
 
-def is_valid_config(application: str, mode: ModeEnv, infrastructure_size: int) -> bool:
+def is_valid_config(
+    application: str,
+    infrastructure_size: int,
+    mode: ModeEnv = ModeEnv.RANDOM,
+) -> bool:
     if mode is ModeEnv.CURATED:
         return infrastructure_size >= MIN_CURATED_SIZE[application]
     return True
@@ -69,7 +73,7 @@ def get_valid_configs() -> list[dict]:
             SEEDS,
             INFRASTRUCTURE_SIZES,
         )
-        if is_valid_config(application, mode, infrastructure_size)
+        if is_valid_config(application, infrastructure_size, mode)
         for heuristic in get_heuristics(mode)
     ]
 
