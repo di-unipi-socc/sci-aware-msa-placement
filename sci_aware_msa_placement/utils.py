@@ -1,11 +1,12 @@
-from swiplserver import (
-    is_prolog_functor,
-    prolog_name,
-    prolog_args,
-    is_prolog_list,
-    is_prolog_atom,
-)
 from pathlib import Path
+
+from swiplserver import (
+    is_prolog_atom,
+    is_prolog_functor,
+    is_prolog_list,
+    prolog_args,
+    prolog_name,
+)
 
 
 def parse_prolog(query):

@@ -15,9 +15,14 @@ dependencies = [
 ]
 
 
+# Build backend
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.11.8,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "."
+module-name = "sci_aware_msa_placement"
 
 [tool.isort]
 profile = "black"
@@ -30,10 +35,6 @@ skip = ["__init__.py"]
 [dependency-groups]
 dev = ["ruff (>=0.15.6,<0.16.0)", "isort (>=8.0.1,<9.0.0)"]
 
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.scripts]
+[project.scripts]
 sci-aware = "sci_aware_msa_placement.main:main"
 debug = "sci_aware_msa_placement.main:debug_main"

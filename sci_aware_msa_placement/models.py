@@ -1,7 +1,10 @@
 import random
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import ClassVar, Union
+from typing import (
+    ClassVar,
+    Union,
+)
 
 
 class NodeSize(IntEnum):

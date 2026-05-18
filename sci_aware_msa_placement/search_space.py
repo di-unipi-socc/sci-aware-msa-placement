@@ -2,8 +2,10 @@ from itertools import product
 
 from ray.tune import grid_search
 
-from sci_aware_msa_placement.models import ModeEnv, ModeTest
-
+from sci_aware_msa_placement.models import (
+    ModeEnv,
+    ModeTest,
+)
 
 TIMEOUT = 1800
 
