@@ -2,13 +2,12 @@
 :- dynamic maxOF/1, minOF/1.
 :- dynamic maxMF/1, minMF/1.
 :- dynamic maxResources/4, minResources/4.
-:- dynamic resourceScore/3.
 :-set_prolog_flag(stack_limit, 16 000 000 000).
 :-set_prolog_flag(last_call_optimisation, true).
 
 :- multifile node/6, carbon_intensity/2.
 :- dynamic node/6, carbon_intensity/2.
-:- discontiguous node/6, carbon_intensity/2, placement/5.
+:- discontiguous node/6, carbon_intensity/2.
 
 cleanUp() :-
     retractall(of(_,_)), retractall(maxOF(_)), retractall(minOF(_)),
@@ -48,3 +47,15 @@ resourceRankingFactors(node) :-
     findall(BWOut,node(N,tor(CPU, RAM, BWIn, BWOut),_,_,_,_),BWOuts), 
     max_list(BWOuts,MaxBWOut), min_list(BWOuts,MinBWOut),
     assert(maxResources(MaxCPU,MaxRAM,MaxBWIn,MaxBWOut)), assert(minResources(MinCPU,MinRAM,MinBWIn,MinBWOut)).
+
+:- multifile route/3, routeProfile/3.
+:- dynamic route/3, routeProfile/3, endpoint/2, endpoint/3.
+:- discontiguous route/3, routeProfile/3.
+
+endpointServices(EP, Services) :- endpoint(EP, Services, _).
+endpointServices(EP, Services) :- endpoint(EP, Services).
+
+placementNodes([S|Services], P, [N|Nodes]) :-
+    member(on(S,N), P),
+    placementNodes(Services, P, Nodes).
+placementNodes([], _, []).

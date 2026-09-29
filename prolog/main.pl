@@ -1,6 +1,7 @@
 % Load utility predicates.
-:- ['utils.pl'].
-:- discontiguous placement/5.
+:- ['utils.pl', 'network.pl'].
+:- ['../data/applications/online-boutique/applicationFULLms.pl'].
+:- ['../data/infrastructures/network-example.pl'].
 
 timedPlacement(Mode, App, P, SCI, N, Time) :-
     statistics(cputime, TStart),
@@ -8,17 +9,15 @@ timedPlacement(Mode, App, P, SCI, N, Time) :-
     statistics(cputime, TEnd),
     Time is TEnd - TStart.
 
+timedPlacement(Mode, Scope, App, P, SCI, N, Time) :-
+    statistics(cputime, TStart),
+    placement(Mode, Scope, App, P, SCI, N),
+    statistics(cputime, TEnd),
+    Time is TEnd - TStart.
+
 placement(greenonly, App, P, SCI, NumberOfNodes) :- placement(quick, 1, App, P, SCI, NumberOfNodes).
 placement(capacityonly, App, P, SCI, NumberOfNodes) :- placement(quick, 2, App, P, SCI, NumberOfNodes).
 placement(linearcombination, App, P, SCI, NumberOfNodes) :- placement(quick, 3, App, P, SCI, NumberOfNodes).
-placement(quick, NSort, App, P, SCI, NumberOfNodes) :-
-    scoredNodes(Nodes, NSort),
-    application(App, _, EPs),
-    scoredMicroservices(Microservices),
-    functionalUnits(App, R),
-    eligiblePlacement(Microservices, Nodes, P), 
-    involvedNodes(P, NumberOfNodes),
-    sci(EPs, R, P, SCI).
 placement(base, App, P, SCI, NumberOfNodes) :-
     application(App, Ms, EPs),
     functionalUnits(App, R),
@@ -33,6 +32,28 @@ placement(tempBase, App, P, SCI, NumberOfNodes) :-
 placement(exhaustive, App, BestP, BestSCI, BestNumberOfNodes) :-
     findall(p(SCI, N, P), placement(base, App, P, SCI, N), [P|Placements]),
     findMinP(Placements, P, p(BestSCI,BestNumberOfNodes,BestP)).
+
+placement(quick, NSort, App, P, SCI, NumberOfNodes) :-
+    scoredNodes(Nodes, NSort),
+    application(App, _, EPs),
+    scoredMicroservices(Microservices),
+    functionalUnits(App, R),
+    eligiblePlacement(Microservices, Nodes, P),
+    involvedNodes(P, NumberOfNodes),
+    sci(EPs, R, P, SCI).
+
+% ------ NEW PART ------
+placement(Mode, components_only, App, P, SCI, N) :-
+    placement(Mode, App, P, SCI, N).
+placement(exhaustive, components_and_network, App, BestP, BestSCI, BestN) :-
+    findall(p(SCI,N,P), placement(base, components_and_network, App, P, SCI, N), [First|Rest]),
+    findMinP(Rest, First, p(BestSCI,BestN,BestP)).
+placement(Mode, components_and_network, App, P, SCI, N) :-
+    member(Mode, [greenonly,capacityonly,linearcombination,base,tempBase]),
+    placement(Mode, App, P, ComponentsSCI, N),
+    networkSCI(App, P, NetworkSCI),
+    SCI is ComponentsSCI + NetworkSCI.
+% ------ NEW PART ------
 
 findMinP([p(SCI,N,P)|Placement], p(OldMinSCI,_,_), p(NewSCI,NewN,NewP)) :-
     SCI < OldMinSCI,
@@ -138,7 +159,8 @@ sci([EP|EPs], R, P, OldSCI, NewSCI) :-
 sci([],_,_,SCI,SCI).
 
 endpointSCI(EP, R, P, SCI) :-
-    endpoint(EP, EPMs),
+    endpointServices(EP, Sequence), 
+    sort(Sequence, EPMs), % sort removes duplicates, that here must be considered only once
     findall(on(Ms,N), (member(Ms, EPMs), member(on(Ms, N), P)), FilteredP),
     probability(EP, Prob),
     carbonEmissions(FilteredP, C),

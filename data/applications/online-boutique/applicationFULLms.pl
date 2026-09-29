@@ -11,12 +11,13 @@ microservice(ad, rr(0.2, 0.6, 0.2, 0.2), 1).
 microservice(email, rr(0.2, 0.5, 0.1, 0.1), 1).
 microservice(currency, rr(0.2, 0.3, 0.05, 0.05), 1).
 
-endpoint(emptyCart, [frontend, cart]).
-endpoint(addToCart, [frontend, product_catalog, cart]).
-endpoint(home, [frontend, currency, product_catalog, cart]).
-endpoint(product, [frontend, product_catalog, currency, ad, cart, recommendation]).
-endpoint(viewCart, [frontend, cart, currency, product_catalog, shipping, recommendation]).
-endpoint(placeOrder, [frontend, checkout, recommendation, product_catalog, currency, cart, shipping, payment, email]).
+% Assumed sequential calls; synthetic AvgGB per consecutive pair/invocation.
+endpoint(emptyCart, [frontend, cart], 0.000001).
+endpoint(addToCart, [frontend, product_catalog, cart], 0.000001).
+endpoint(home, [frontend, currency, product_catalog, cart], 0.000001).
+endpoint(product, [frontend, product_catalog, currency, ad, cart, recommendation], 0.000001).
+endpoint(viewCart, [frontend, cart, currency, product_catalog, shipping, recommendation], 0.000001).
+endpoint(placeOrder, [frontend, checkout, recommendation, product_catalog, currency, cart, shipping, payment, email], 0.000001).
 
 probability(home, 0.25).
 probability(product, 0.4).

@@ -68,8 +68,8 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/_build/
+# Documentation
+docs/
 
 # PyBuilder
 .pybuilder/
@@ -218,4 +218,5 @@ __marimo__/
 # Custom
 *.DS_Store
 /output
-/data/infrastructures
+/data/infrastructures/*
+!/data/infrastructures/network-example.pl
