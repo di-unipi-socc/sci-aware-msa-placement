@@ -5,9 +5,6 @@
 :-set_prolog_flag(stack_limit, 16 000 000 000).
 :-set_prolog_flag(last_call_optimisation, true).
 
-:- multifile node/6, carbon_intensity/2.
-:- dynamic node/6, carbon_intensity/2.
-:- discontiguous node/6, carbon_intensity/2.
 
 cleanUp() :-
     retractall(of(_,_)), retractall(maxOF(_)), retractall(minOF(_)),
@@ -48,9 +45,7 @@ resourceRankingFactors(node) :-
     max_list(BWOuts,MaxBWOut), min_list(BWOuts,MinBWOut),
     assert(maxResources(MaxCPU,MaxRAM,MaxBWIn,MaxBWOut)), assert(minResources(MinCPU,MinRAM,MinBWIn,MinBWOut)).
 
-:- multifile route/3, routeProfile/3.
-:- dynamic route/3, routeProfile/3, endpoint/2, endpoint/3.
-:- discontiguous route/3, routeProfile/3.
+:- dynamic endpoint/2, endpoint/3.
 
 endpointServices(EP, Services) :- endpoint(EP, Services, _).
 endpointServices(EP, Services) :- endpoint(EP, Services).

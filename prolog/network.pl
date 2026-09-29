@@ -1,5 +1,6 @@
 % Endpoint volumes: GB per consecutive pair and invocation.
-% Route profiles: operational and production kgCO2eq/GB (Ficher, Table III).
+% Montpellier profiles: operational/production kgCO2eq/GB (Ficher, Table III).
+% Linear distance scaling assumes a 700 km Orsay-Montpellier reference.
 
 networkSCI(App, P, SCI) :- networkSCI(App, P, O, M), SCI is O + M.
 networkSCI(App, P, O, M) :-
@@ -35,6 +36,8 @@ transferCarbon(N1, N2, GB, O, M) :-
 networkIntensity(N, N, 0, 0).
 networkIntensity(N1, N2, O, M) :-
     dif(N1, N2),
-    route(N1, N2, Profile),
-    routeProfile(Profile, O, M).
+    route(N1, N2, DistKM, Profile),
+    routeProfile(Profile, ORef, MRef),
+    O is ORef * DistKM / 700, % 700 km Orsay-Montpellier reference. Can become a parameter if needed.
+    M is MRef * DistKM / 700.
 
