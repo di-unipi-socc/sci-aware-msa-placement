@@ -35,6 +35,14 @@ class ModeTest(IntEnum):
     CAPACITYONLY = 2
     LINEARCOMBINATION = 3
     BASE = 4
+    NETWORKONLY = 5
+    SCIGREEDY = 6
+    SCILOCALSEARCH = 7
+
+
+class ScopeTest(IntEnum):
+    COMPONENTS_ONLY = 0
+    COMPONENTS_AND_NETWORK = 1
 
 
 @dataclass(slots=True)

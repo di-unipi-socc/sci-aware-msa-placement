@@ -220,3 +220,4 @@ __marimo__/
 /output
 /data/infrastructures/*
 !/data/infrastructures/network-example.pl
+!/data/infrastructures/network-realistic.pl

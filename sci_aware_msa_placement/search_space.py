@@ -5,6 +5,7 @@ from ray.tune import grid_search
 from sci_aware_msa_placement.models import (
     ModeEnv,
     ModeTest,
+    ScopeTest,
 )
 
 TIMEOUT = 1800
@@ -68,6 +69,7 @@ def get_valid_configs() -> list[dict]:
             "infrastructure_size": infrastructure_size,
             "timeout": TIMEOUT,
             "heuristic": heuristic,
+            "scope": ScopeTest.COMPONENTS_ONLY,
         }
         for application, mode, seed, infrastructure_size in product(
             APPLICATIONS,

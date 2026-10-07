@@ -27,8 +27,8 @@ PROLOG = {
     "application_query": "application(A, MS, EPs).",
     "microservice_query": "microservice({name}, rr(CPU, RAM, BWIN, BWOUT), TiR).",
     "count_microservices_query": "findall(M, microservice(_,_,_), L), length(L, N).",
-    "timed_placement_query": "timedPlacement({mode}, App, P, SCI, N, Time).",
-    "timed_placement_base_query": "timedPlacement(tempBase, App, {placement}, SCI, N, Time).",
+    "timed_placement_query": "timedPlacement({mode}, {scope}, App, P, SCI, N, Time).",
+    "timed_placement_base_query": "timedPlacement(evaluatePlacement, {scope}, App, {placement}, SCI, N, Time).",
     "carbon_intensity_fact": "carbon_intensity('{name}', {ci}).\n",
 }
 
@@ -37,6 +37,7 @@ RESULT_KEYS = {
     "size": "size",
     "mode": "mode",
     "heuristic": "heuristic",
+    "scope": "scope",
     "seed": "seed",
     "infrastructure_path": "infrastructure_path",
     "time": "time",

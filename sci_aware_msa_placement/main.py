@@ -10,6 +10,7 @@ from sci_aware_msa_placement.experiment import Experiment
 from sci_aware_msa_placement.models import (
     ModeEnv,
     ModeTest,
+    ScopeTest,
 )
 from sci_aware_msa_placement.search_space import get_search_space
 from sci_aware_msa_placement.settings import (
@@ -28,6 +29,7 @@ def sci_aware(config: dict) -> dict:
             infrastructure_size=cfg["infrastructure_size"],
             mode=cfg["mode"],
             heuristic=cfg["heuristic"],
+            scope=cfg.get("scope", ScopeTest.COMPONENTS_ONLY),
             infrastructure_dir=Path(temp_dir),
             seed=cfg["seed"],
             timeout=cfg["timeout"],

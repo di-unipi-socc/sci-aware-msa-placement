@@ -15,7 +15,7 @@ predicates, making the decision process explicit, inspectable, and extensible.
 .
 ├── data/
 │   └── applications/              # Prolog microservice application inputs
-├── prolog/                        # Placement model and Prolog utilities
+├── prolog/                        # Placement model, heuristics, and Prolog utilities
 ├── results/
 │   ├── notebooks/                 # Result cleaning and plotting notebooks
 │   └── parquets/                  # Raw experiment outputs

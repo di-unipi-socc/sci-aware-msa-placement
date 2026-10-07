@@ -11,6 +11,7 @@ from sci_aware_msa_placement.builder import Builder
 from sci_aware_msa_placement.models import (
     ModeEnv,
     ModeTest,
+    ScopeTest,
 )
 from sci_aware_msa_placement.search_space import TIMEOUT
 from sci_aware_msa_placement.settings import (
@@ -34,6 +35,7 @@ class Experiment:
     infrastructure_size: int
     mode: ModeEnv
     heuristic: ModeTest
+    scope: ScopeTest = ScopeTest.COMPONENTS_ONLY
     infrastructure_dir: Path | None = INFRA_DIR
     seed: int | None = None
     app_dir: Path = APP_DIR
@@ -88,6 +90,7 @@ class Experiment:
             RESULT_KEYS["application"]: self.application_name,
             RESULT_KEYS["mode"]: self.mode.name.lower(),
             RESULT_KEYS["heuristic"]: self.heuristic.name.lower(),
+            RESULT_KEYS["scope"]: self.scope.name.lower(),
             RESULT_KEYS["seed"]: self.seed,
             RESULT_KEYS["size"]: self.infrastructure_size,
         }
@@ -116,9 +119,13 @@ class Experiment:
     def _placement_query(self, builder: Builder) -> str:
         if self.heuristic == ModeTest.BASE:
             return PROLOG["timed_placement_base_query"].format(
+                scope=self.scope.name.lower(),
                 placement=self._placement_term(builder)
             )
-        return PROLOG["timed_placement_query"].format(mode=self.heuristic.name.lower())
+        return PROLOG["timed_placement_query"].format(
+            mode=self.heuristic.name.lower(),
+            scope=self.scope.name.lower(),
+        )
 
     def _placement_term(self, builder: Builder) -> str:
         if self.mode != ModeEnv.CURATED:
