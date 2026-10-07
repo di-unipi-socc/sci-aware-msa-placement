@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from swiplserver import (
     is_prolog_atom,
     is_prolog_functor,
@@ -24,7 +22,3 @@ def parse_prolog(query):
     else:
         ans = query
     return ans
-
-
-def application_path(app_dir: Path, app_name: str) -> Path:
-    return app_dir / f"{app_name.lower()}" / "applicationFULLms.pl"

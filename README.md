@@ -14,18 +14,17 @@ predicates, making the decision process explicit, inspectable, and extensible.
 ```text
 .
 ├── data/
-│   └── applications/              # Prolog microservice application inputs
+│   ├── applications/              # Prolog application examples
+│   └── infrastructures/           # Prolog infrastructure examples
 ├── prolog/                        # Placement model, heuristics, and Prolog utilities
 ├── results/
 │   ├── notebooks/                 # Result cleaning and plotting notebooks
 │   └── parquets/                  # Raw experiment outputs
 ├── sci_aware_msa_placement/
-│   ├── builder.py                 # Infrastructure instance generation
+│   ├── builder.py                 # Application and infrastructure generation
+│   ├── config.py                  # Ray grid and generator parameters
 │   ├── experiment.py              # Single experiment execution
 │   ├── main.py                    # Ray Tune entrypoints
-│   ├── models.py                  # Domain models and experiment enums
-│   ├── search_space.py            # Applications, seeds, sizes, and heuristics
-│   ├── settings.py                # Project paths and Prolog query templates
 │   └── utils.py                   # Shared parsing and path helpers
 └── README.md
 ```
@@ -33,7 +32,7 @@ predicates, making the decision process explicit, inspectable, and extensible.
 ## How to use
 ### Requirements
 
-- Python 3.11 or newer
+- Python 3.12 or newer
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - [SWI-Prolog](https://www.swi-prolog.org/) available on `PATH`
 
@@ -53,21 +52,29 @@ uv run ray start --head --port 0
 uv run --active sci-aware 
 ```
 
-The script asks for an experiment name. If left blank, it uses `sci-aware`.
+Run the single configuration defined as `DEBUG_CONFIG` in `config.py` with:
+
+```bash
+uv run --active debug
+```
+
 Results are saved as:
 
 ```text
-results/parquets/<experiment-name>/raw-sci-aware.parquet
+results/parquets/network-sci/raw-sci-aware.parquet
 ```
 
-The default search space is defined in
-`sci_aware_msa_placement/search_space.py` and covers:
+The Ray Tune search space is defined in
+`sci_aware_msa_placement/config.py` and covers:
 
-- applications: `demo`, `online-boutique`
-- environment modes: random and curated
-- infrastructure sizes from `2^5` to `2^20`
-- exhaustive, baseline, and heuristic placement modes where applicable
-- multiple random seeds
+- synthetic applications with 10, 20, and 40 services
+- synthetic infrastructures with 16, 32, and 64 nodes
+- Erdős–Rényi, Barabási–Albert, and Watts–Strogatz graphs
+- component-only and component-plus-network SCI
+- top-k, network-aware, SCI-greedy, and SCI local-search placements
+- multiple seeds, top-k values, and network-aware weights
+- RENATER Montpellier peak and off-peak route profiles
+- zero or reference-value network embodied emissions
 
 ### Analyse Results
 

@@ -1,135 +1,223 @@
+import heapq
 import random
-from dataclasses import (
-    dataclass,
-    field,
-)
 from pathlib import Path
 
-from swiplserver import PrologMQI
-
-from sci_aware_msa_placement.models import (
-    FactoryNode,
-    Microservice,
-    ModeEnv,
-    NodeType,
-)
-from sci_aware_msa_placement.settings import (
-    APP_DIR,
-    CURATED_EXTRA_NODE_PAIR_SIZE,
-    ENCODING,
-    INFRA_DIR,
-    MODE_FILE_PREFIX,
-    OPTIMAL_KEYS,
-    PL_SUFFIX,
-    PROLOG,
-)
-from sci_aware_msa_placement.utils import application_path
+from sci_aware_msa_placement import config
 
 
-@dataclass(slots=True)
-class Builder:
-    mode: ModeEnv
-    n: int
-    seed: int | None = None
-    application_name: str | None = None
-    infra_dir: Path = INFRA_DIR
-    app_dir: Path = APP_DIR
-    optimal: list[dict[str, str]] = field(default_factory=list)
+def build_application(parameters: dict, output_dir: Path) -> tuple[Path, str]:
+    rng = random.Random(parameters["seed"])
+    size = parameters["application_size"]
+    topology = parameters["application_topology"]
+    application = f"synthetic_{topology}_{size}_{parameters['seed']}"
+    services = [f"service_{index}" for index in range(size)]
+    edges = _graph_edges(size, topology, rng)
+    rng.shuffle(edges)
 
-    def build(self) -> Path:
-        self._set_seed()
-        self._reset_factory()
-        if self.mode == ModeEnv.RANDOM:
-            content = self._build_random()
-            filename = self._make_filename(MODE_FILE_PREFIX["random"])
-        elif self.mode == ModeEnv.CURATED:
-            content = self._build_curated()
-            filename = self._make_filename(MODE_FILE_PREFIX["curated"])
-        else:
-            raise ValueError(f"Invalid mode {self.mode}")
-
-        return self._write_file(filename, content)
-
-    def _set_seed(self) -> None:
-        if self.seed is not None:
-            random.seed(self.seed)
-
-    def _reset_factory(self) -> None:
-        FactoryNode.reset_num_nodes_s()
-        FactoryNode.reset_num_nodes_t()
-
-    def _make_filename(self, prefix: str) -> str:
-        return f"{prefix}-{self.n}{PL_SUFFIX}"
-
-    def _write_file(self, filename: str, content: str) -> Path:
-        self.infra_dir.mkdir(parents=True, exist_ok=True)
-        output_path = self.infra_dir / filename
-        output_path.write_text(content, encoding=ENCODING)
-        return output_path
-
-    def _serialize(self, nodes: list) -> str:
-        node_facts = "".join(f"{node}\n" for node in nodes)
-        carbon_intensity_facts = "".join(
-            PROLOG["carbon_intensity_fact"].format(name=node.name, ci=node.ci)
-            for node in nodes
-        ).replace("'", "")
-        return node_facts + carbon_intensity_facts
-
-    def _build_random(self) -> str:
-        nodes = [FactoryNode.node(NodeType.RANDOM) for _ in range(self.n)]
-        random.shuffle(nodes)
-        return self._serialize(nodes)
-
-    def _build_curated(self) -> str:
-        microservices = self._load_microservices()
-
-        if self.n < len(microservices):
-            raise ValueError(
-                f"Number of nodes ({self.n}) must be >= number of microservices ({len(microservices)})"
-            )
-
-        nodes = []
-        extra_nodes = self.n - len(microservices)
-
-        for _ in range(extra_nodes // CURATED_EXTRA_NODE_PAIR_SIZE):
-            ms = random.choice(microservices)
-            nodes.append(FactoryNode.node(NodeType.DIRTY, ms))
-            nodes.append(FactoryNode.node(NodeType.BROKEN, ms))
-
-        for ms in microservices:
-            fit_node = FactoryNode.node(NodeType.FIT, ms)
-            self.optimal.append(
-                {
-                    OPTIMAL_KEYS["microservice"]: ms.name,
-                    OPTIMAL_KEYS["node"]: fit_node.name,
-                }
-            )
-            nodes.append(fit_node)
-
-        return self._serialize(nodes)
-
-    def _load_microservices(self) -> list[Microservice]:
-        app_path = application_path(self.app_dir, self.application_name)
-
-        with PrologMQI() as mqi, mqi.create_thread() as prolog:
-            prolog.query(f"consult('{app_path.as_posix()}').")
-            result = prolog.query(PROLOG["application_query"])[0]
-            ms_names = result["MS"]
-
-            return [
-                self._build_microservice(
-                    ms_name,
-                    prolog.query(PROLOG["microservice_query"].format(name=ms_name))[0],
-                )
-                for ms_name in ms_names
-            ]
-
-    def _build_microservice(self, name: str, data: dict) -> Microservice:
-        return Microservice(
-            name=name,
-            ncpu=data["CPU"],
-            ram=data["RAM"],
-            bwin=data["BWIN"],
-            bwout=data["BWOUT"],
-            tir=data["TiR"],
+    endpoint_count = min(config.ENDPOINT_COUNT, len(edges))
+    interactions = [[] for _ in range(endpoint_count)]
+    for index, (source, target) in enumerate(edges):
+        avg_gb = rng.uniform(*config.INTERACTION_GB_RANGE)
+        interactions[index % endpoint_count].append(
+            f"({services[source]},{services[target]},{_number(avg_gb)})"
         )
+
+    weights = [rng.random() for _ in range(endpoint_count)]
+    total_weight = sum(weights)
+    probabilities = [weight / total_weight for weight in weights]
+    endpoints = [f"endpoint_{index}" for index in range(endpoint_count)]
+
+    lines = [
+        f"application({application},[{','.join(services)}],[{','.join(endpoints)}]).",
+        "",
+    ]
+    for service in services:
+        cpu = rng.uniform(*config.CPU_REQUIREMENT_RANGE)
+        ram = rng.uniform(*config.RAM_REQUIREMENT_RANGE)
+        bandwidth_in = rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
+        bandwidth_out = rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
+        time_in_reserve = rng.uniform(*config.TIME_IN_RESERVE_RANGE)
+        lines.append(
+            f"microservice({service},rr({_number(cpu)},{_number(ram)},"
+            f"{_number(bandwidth_in)},{_number(bandwidth_out)}),"
+            f"{_number(time_in_reserve)})."
+        )
+
+    lines.append("")
+    for endpoint, pairs, probability in zip(
+        endpoints, interactions, probabilities, strict=True
+    ):
+        lines.append(f"endpoint({endpoint},[{','.join(pairs)}]).")
+        lines.append(f"probability({endpoint},{_number(probability)}).")
+
+    lines.extend(["", f"functionalUnits({application},{config.FUNCTIONAL_UNITS})."])
+    path = output_dir / "application.pl"
+    path.write_text("\n".join(lines) + "\n", encoding=config.ENCODING)
+    return path, application
+
+
+def build_network(parameters: dict, output_dir: Path) -> Path:
+    rng = random.Random(parameters["seed"] + 1)
+    size = parameters["infrastructure_size"]
+    topology = parameters["infrastructure_topology"]
+    profile = parameters["route_profile"]
+    embodied_per_gb = (
+        profile["embodied_per_gb"]
+        if parameters["include_network_embodied"]
+        else 0.0
+    )
+    nodes = [f"node_{index}" for index in range(size)]
+    edges = _graph_edges(size, topology, rng)
+    weighted_edges = [
+        (source, target, rng.uniform(*config.LINK_DISTANCE_KM_RANGE))
+        for source, target in edges
+    ]
+
+    lines = []
+    for node in nodes:
+        cpu = rng.randint(*config.NODE_CPU_RANGE)
+        ram = rng.uniform(*config.NODE_RAM_RANGE)
+        bandwidth_in = rng.uniform(*config.NODE_BANDWIDTH_RANGE)
+        bandwidth_out = rng.uniform(*config.NODE_BANDWIDTH_RANGE)
+        power = rng.uniform(*config.POWER_PER_CPU_RANGE)
+        lifetime = rng.uniform(*config.EXPECTED_LIFETIME_RANGE)
+        embodied = rng.uniform(*config.TOTAL_EMBODIED_EMISSIONS_RANGE)
+        pue = rng.uniform(*config.PUE_RANGE)
+        carbon_intensity = rng.uniform(*config.CARBON_INTENSITY_RANGE)
+        lines.append(
+            f"node({node},tor({cpu},{_number(ram)},{_number(bandwidth_in)},"
+            f"{_number(bandwidth_out)}),{_number(power)},{_number(lifetime)},"
+            f"{_number(embodied)},{_number(pue)})."
+        )
+        lines.append(f"carbon_intensity({node},{_number(carbon_intensity)}).")
+
+    lines.extend(
+        [
+            "",
+            f"routeProfile({profile['name']},{profile['operational_per_gb']},"
+            f"{embodied_per_gb}).",
+            "",
+        ]
+    )
+    distances = _shortest_distances(size, weighted_edges)
+    for source in range(size):
+        for target in range(size):
+            if source != target:
+                lines.append(
+                    f"route({nodes[source]},{nodes[target]},"
+                    f"{_number(distances[source][target])},{profile['name']})."
+                )
+
+    path = output_dir / "infrastructure.pl"
+    path.write_text("\n".join(lines) + "\n", encoding=config.ENCODING)
+    return path
+
+
+def _graph_edges(size: int, topology: str, rng: random.Random) -> list[tuple[int, int]]:
+    if size < 2:
+        raise ValueError("Graph size must be at least 2")
+    if topology == "erdos_renyi":
+        edges = _erdos_renyi(size, rng)
+    elif topology == "barabasi_albert":
+        edges = _barabasi_albert(size, rng)
+    elif topology == "watts_strogatz":
+        edges = _watts_strogatz(size, rng)
+    else:
+        raise ValueError(f"Unknown topology: {topology}")
+    return sorted(_connect_components(size, edges))
+
+
+def _erdos_renyi(size: int, rng: random.Random) -> set[tuple[int, int]]:
+    return {
+        (source, target)
+        for source in range(size)
+        for target in range(source + 1, size)
+        if rng.random() < config.ERDOS_RENYI_PROBABILITY
+    }
+
+
+def _barabasi_albert(size: int, rng: random.Random) -> set[tuple[int, int]]:
+    attachments = min(config.BARABASI_ALBERT_ATTACHMENTS, size - 1)
+    initial_size = attachments + 1
+    edges = {
+        (source, target)
+        for source in range(initial_size)
+        for target in range(source + 1, initial_size)
+    }
+    degrees = [initial_size - 1] * initial_size
+    for node in range(initial_size, size):
+        targets = set()
+        while len(targets) < attachments:
+            targets.add(rng.choices(range(node), weights=degrees, k=1)[0])
+        degrees.append(0)
+        for target in targets:
+            edges.add((target, node))
+            degrees[target] += 1
+            degrees[node] += 1
+    return edges
+
+
+def _watts_strogatz(size: int, rng: random.Random) -> set[tuple[int, int]]:
+    neighbors = min(config.WATTS_STROGATZ_NEIGHBORS, size - 1)
+    neighbors -= neighbors % 2
+    edges = set()
+    for source in range(size):
+        for offset in range(1, neighbors // 2 + 1):
+            target = (source + offset) % size
+            edge = tuple(sorted((source, target)))
+            if rng.random() < config.WATTS_STROGATZ_REWIRE_PROBABILITY:
+                candidates = [
+                    node
+                    for node in range(size)
+                    if node != source and tuple(sorted((source, node))) not in edges
+                ]
+                if candidates:
+                    edge = tuple(sorted((source, rng.choice(candidates))))
+            edges.add(edge)
+    return edges
+
+
+def _connect_components(
+    size: int, edges: set[tuple[int, int]]
+) -> set[tuple[int, int]]:
+    connected = {0}
+    while len(connected) < size:
+        expanded = connected | {
+            target for source, target in edges if source in connected
+        } | {source for source, target in edges if target in connected}
+        if expanded == connected:
+            target = min(set(range(size)) - connected)
+            edges.add((min(connected), target))
+            expanded.add(target)
+        connected = expanded
+    return edges
+
+
+def _shortest_distances(
+    size: int, edges: list[tuple[int, int, float]]
+) -> list[list[float]]:
+    adjacency = [[] for _ in range(size)]
+    for source, target, distance in edges:
+        adjacency[source].append((target, distance))
+        adjacency[target].append((source, distance))
+
+    distances = []
+    for origin in range(size):
+        current = [float("inf")] * size
+        current[origin] = 0.0
+        queue = [(0.0, origin)]
+        while queue:
+            distance, node = heapq.heappop(queue)
+            if distance != current[node]:
+                continue
+            for neighbor, weight in adjacency[node]:
+                candidate = distance + weight
+                if candidate < current[neighbor]:
+                    current[neighbor] = candidate
+                    heapq.heappush(queue, (candidate, neighbor))
+        distances.append(current)
+    return distances
+
+
+def _number(value: float) -> str:
+    return f"{value:.12g}"

@@ -1,4 +1,3 @@
-import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -6,81 +5,36 @@ import ray
 from ray import tune
 from ray.air import RunConfig
 
+from sci_aware_msa_placement import config
 from sci_aware_msa_placement.experiment import Experiment
-from sci_aware_msa_placement.models import (
-    ModeEnv,
-    ModeTest,
-    ScopeTest,
-)
-from sci_aware_msa_placement.search_space import get_search_space
-from sci_aware_msa_placement.settings import (
-    EXPERIMENT_NAME,
-    OUTPUT_DIR,
-    PARQUETS_DIR,
-)
 
 
-def sci_aware(config: dict) -> dict:
-    cfg = config["experiment"]
-
-    with TemporaryDirectory() as temp_dir:
-        experiment = Experiment(
-            application_name=cfg["application"],
-            infrastructure_size=cfg["infrastructure_size"],
-            mode=cfg["mode"],
-            heuristic=cfg["heuristic"],
-            scope=cfg.get("scope", ScopeTest.COMPONENTS_ONLY),
-            infrastructure_dir=Path(temp_dir),
-            seed=cfg["seed"],
-            timeout=cfg["timeout"],
-        )
-
-        return experiment.run()
+def run_experiment(parameters: dict) -> dict:
+    with TemporaryDirectory() as work_dir:
+        return Experiment(parameters, Path(work_dir)).run()
 
 
 def main() -> Path:
-    start_time = time.time()
     if not ray.is_initialized():
-        ray.init(address="auto")
+        ray.init(address=config.RAY_ADDRESS)
 
-    exp_name = (
-        input(f"Enter experiment name (default: {EXPERIMENT_NAME}): ").strip()
-        or EXPERIMENT_NAME
-    )
-
-    tuner = tune.Tuner(
-        sci_aware,
-        param_space=get_search_space(),
+    results = tune.Tuner(
+        run_experiment,
+        param_space=config.SEARCH_SPACE,
         run_config=RunConfig(
-            name=exp_name,
-            storage_path=str(OUTPUT_DIR),
+            name=config.EXPERIMENT_NAME,
+            storage_path=str(config.OUTPUT_DIR),
         ),
-    )
+    ).fit()
 
-    results = tuner.fit()
-    dataframe = results.get_dataframe()
-
-    output_path = PARQUETS_DIR / exp_name
-    output_path.mkdir(parents=True, exist_ok=True)
-    output_path = output_path / "raw-sci-aware.parquet"
-
-    dataframe.to_parquet(output_path, index=False)
-    print(f"Saved results to: {output_path}")
-    print(f"Total execution time: {time.time() - start_time:.4f} seconds")
+    output_dir = config.PARQUETS_DIR / config.EXPERIMENT_NAME
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "raw-sci-aware.parquet"
+    results.get_dataframe().to_parquet(output_path, index=False)
+    return output_path
 
 
-def debug_main():
-    for h in [ModeTest.GREENONLY, ModeTest.CAPACITYONLY, ModeTest.LINEARCOMBINATION]:
-        result = sci_aware(
-            {
-                "experiment": {
-                    "application": "online-boutique",
-                    "infrastructure_size": 2**20,
-                    "mode": ModeEnv.CURATED,
-                    "heuristic": h,
-                    "seed": 42,
-                    "timeout": 600,
-                }
-            }
-        )
-        print(result)
+def debug_main() -> dict:
+    result = run_experiment(config.DEBUG_CONFIG)
+    print(result)
+    return result
