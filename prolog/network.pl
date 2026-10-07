@@ -1,43 +1,72 @@
-% Endpoint volumes: GB per consecutive pair and invocation.
-% Montpellier profiles: operational/production kgCO2eq/GB (Ficher, Table III).
-% Linear distance scaling assumes a 700 km Orsay-Montpellier reference.
+% Endpoint volumes are expected GB per interaction and invocation.
+% Route profiles are operational/production kgCO2eq/GB at 700 km.
 
-networkSCI(App, P, SCI) :- networkSCI(App, P, O, M), SCI is O + M.
-networkSCI(App, P, O, M) :-
-    application(App, _, EPs),
-    networkEndpointsSCI(EPs, P, O, M).
+networkSCI(App, P, SCI) :-
+    networkSCI(App, P, Operational, Embodied),
+    SCI is Operational + Embodied.
 
-networkEndpointsSCI([EP|EPs], P, O, M) :-
-    endpointNetworkSCI(EP, P, CurrentO, CurrentM),
-    networkEndpointsSCI(EPs, P, RestO, RestM),
-    O is CurrentO + RestO, M is CurrentM + RestM.
+networkSCI(App, P, Operational, Embodied) :-
+    application(App, _, Endpoints),
+    networkEndpointsSCI(Endpoints, P, Operational, Embodied).
+
+networkEndpointsSCI([Endpoint|Endpoints], P, Operational, Embodied) :-
+    endpointNetworkSCI(Endpoint, P, CurrentOperational, CurrentEmbodied),
+    networkEndpointsSCI(Endpoints, P, RestOperational, RestEmbodied),
+    Operational is CurrentOperational + RestOperational,
+    Embodied is CurrentEmbodied + RestEmbodied.
 networkEndpointsSCI([], _, 0, 0).
 
-endpointNetworkSCI(EP, P, O, M) :-
-    endpoint(EP, Services, AvgGB),
-    probability(EP, Prob),
-    placementNodes(Services, P, Nodes),
-    chainSCI(Nodes, AvgGB, ChainO, ChainM),
-    O is Prob * ChainO, M is Prob * ChainM.
+endpointNetworkSCI(Endpoint, P, Operational, Embodied) :-
+    endpoint(Endpoint, Interactions),
+    probability(Endpoint, Probability),
+    interactionsSCI(Interactions, P, InteractionOperational, InteractionEmbodied),
+    Operational is Probability * InteractionOperational,
+    Embodied is Probability * InteractionEmbodied.
 
-chainSCI([N1,N2|Nodes], AvgGB, O, M) :-
-    transferCarbon(N1, N2, AvgGB, CurrentO, CurrentM),
-    chainSCI([N2|Nodes], AvgGB, RestO, RestM),
-    O is CurrentO + RestO, M is CurrentM + RestM.
-chainSCI([_], _, 0, 0).
-chainSCI([], _, 0, 0).
+interactionsSCI([Interaction|Interactions], P, Operational, Embodied) :-
+    interactionSCI(Interaction, P, CurrentOperational, CurrentEmbodied),
+    interactionsSCI(Interactions, P, RestOperational, RestEmbodied),
+    Operational is CurrentOperational + RestOperational,
+    Embodied is CurrentEmbodied + RestEmbodied.
+interactionsSCI([], _, 0, 0).
+
+interactionSCI((A,B,AvgGB), P, Operational, Embodied) :-
+    member(on(A,N1), P),
+    member(on(B,N2), P),
+    transferCarbon(N1, N2, AvgGB, Operational, Embodied).
+
+partialNetworkSCI(App, P, SCI) :-
+    application(App, _, Endpoints),
+    findall(EndpointSCI,
+        (member(Endpoint,Endpoints),
+         partialEndpointNetworkSCI(Endpoint,P,EndpointSCI)),
+        EndpointSCIs),
+    sum_list(EndpointSCIs, SCI).
+
+partialEndpointNetworkSCI(Endpoint, P, SCI) :-
+    endpoint(Endpoint, Interactions),
+    probability(Endpoint, Probability),
+    findall(Carbon,
+        (member((A,B,AvgGB),Interactions),
+         member(on(A,N1),P),
+         member(on(B,N2),P),
+         transferCarbon(N1,N2,AvgGB,Operational,Embodied),
+         Carbon is Operational + Embodied),
+        Carbons),
+    sum_list(Carbons, InteractionSCI),
+    SCI is Probability * InteractionSCI.
 
 transferCarbon(_, _, 0, 0, 0).
-transferCarbon(N1, N2, GB, O, M) :-
+transferCarbon(N1, N2, GB, Operational, Embodied) :-
     GB > 0,
-    networkIntensity(N1, N2, OPerGB, MPerGB),
-    O is GB * OPerGB, M is GB * MPerGB.
+    networkIntensity(N1, N2, OperationalPerGB, EmbodiedPerGB),
+    Operational is GB * OperationalPerGB,
+    Embodied is GB * EmbodiedPerGB.
 
 networkIntensity(N, N, 0, 0).
-networkIntensity(N1, N2, O, M) :-
+networkIntensity(N1, N2, Operational, Embodied) :-
     dif(N1, N2),
-    route(N1, N2, DistKM, Profile),
-    routeProfile(Profile, ORef, MRef),
-    O is ORef * DistKM / 700, % 700 km Orsay-Montpellier reference. Can become a parameter if needed.
-    M is MRef * DistKM / 700.
-
+    route(N1, N2, DistanceKM, Profile),
+    routeProfile(Profile, OperationalReference, EmbodiedReference),
+    Operational is OperationalReference * DistanceKM / 700,
+    Embodied is EmbodiedReference * DistanceKM / 700.

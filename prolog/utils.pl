@@ -1,12 +1,9 @@
-:-set_prolog_flag(stack_limit, 16 000 000 000).
-:-set_prolog_flag(last_call_optimisation, true).
+endpointServices(Endpoint, Services) :-
+    endpoint(Endpoint, Interactions),
+    findall(Service,
+        (member(Interaction,Interactions), interactionService(Interaction,Service)),
+        RepeatedServices),
+    sort(RepeatedServices, Services).
 
-:- dynamic endpoint/2, endpoint/3.
-
-endpointServices(EP, Services) :- endpoint(EP, Services, _).
-endpointServices(EP, Services) :- endpoint(EP, Services).
-
-placementNodes([S|Services], P, [N|Nodes]) :-
-    member(on(S,N), P),
-    placementNodes(Services, P, Nodes).
-placementNodes([], _, []).
+interactionService((A,_,_), A).
+interactionService((_,B,_), B).

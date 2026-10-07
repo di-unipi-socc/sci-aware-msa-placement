@@ -1,6 +1,6 @@
 % Load utility predicates.
-:- ['utils.pl', 'network.pl', 'heuristics.pl'].
-:- ['../data/applications/online-boutique/applicationFULLms.pl'].
+:- ['utils.pl', 'network.pl', 'score.pl', 'heuristics.pl'].
+:- ['../data/applications/online-boutique/applicationFULLms-realistic.pl'].
 :- ['../data/infrastructures/network-realistic.pl'].
 
 :- set_prolog_flag(stack_limit, 128 000 000 000).
