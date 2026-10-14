@@ -153,11 +153,10 @@ Network embodied emissions are disabled in the main grid. Enabling
 `INCLUDE_NETWORK_EMBODIED` restores the reference embodied coefficient without
 changing the model.
 
-Each result contains `objective_sci`, `total_sci`, `component_sci`,
-`component_operational_sci`, `component_embodied_sci`, `network_sci`,
-`network_operational_sci`, and `network_embodied_sci`. `objective_sci` follows
-the selected scope; `total_sci` always includes components and network. The
-legacy `sci` column remains an alias of `objective_sci`.
+Each trial stores only the four atomic SCI results:
+`component_operational_sci`, `component_embodied_sci`,
+`network_operational_sci`, and `network_embodied_sci`. Component, network,
+total, and objective SCI are derived from these columns during analysis.
 
 ## Placement heuristics
 
@@ -203,24 +202,30 @@ approximately 163 seconds. The full Ray Tune grid has not been executed.
 
 ## Outputs
 
-Each Ray Tune trial stores generated `application.pl` and `infrastructure.pl`
-files under its own `output/` directory. Trial dictionaries are merged by Ray
-Tune and saved to:
+Each Ray Tune trial generates `application.pl` and `infrastructure.pl` in a
+temporary directory that is deleted after execution. Trial dictionaries are
+merged by Ray Tune and saved to:
 
 `results/parquets/network-sci/raw-sci-aware.parquet`.
 
-The result dictionary contains flat columns for every selected experimental
-dimension and the fixed generator parameters needed to interpret it. Ray also
-stores the original nested trial configuration in `params.json` and exposes it
-through `config/...` columns in the merged DataFrame.
+The trial result dictionary contains generated-instance statistics,
+execution status, and the four atomic SCI results. It does not repeat the
+trial configuration or global constants. The final Parquet file takes each
+selected experimental dimension from Ray's `config/...` columns and gives it a
+flat name; Ray's bookkeeping columns are discarded.
 
-For direct filtering, parameterized heuristic names are also split into
+For direct filtering, parameterized heuristic names are split into
 `heuristic_name`, `top_k`, `green_weight`, `capacity_weight`, and
-`centrality_weight`. The concrete number of nodes assigned to each hardware
-profile is stored in separate `*_nodes` columns.
+`centrality_weight`.
 
 Generated-instance statistics are retained as columns as well: application
 edge count, actual endpoint count, average interaction volume, expected traffic
 per invocation, physical-link count, actual mean degree, and average and maximum
 route distances. This distinguishes configured targets from values produced by
 the random graph generators.
+
+If an experiment directory already exists, Ray Tune restores it by default,
+resumes unfinished trials, and restarts errored trials. These behaviours are
+controlled by `RESUME_EXPERIMENT`, `RESUME_UNFINISHED_TRIALS`,
+`RESUME_ERRORED_TRIALS`, and `RESTART_ERRORED_TRIALS` in `config.py`.
+Ray requires the last two options to be mutually exclusive.

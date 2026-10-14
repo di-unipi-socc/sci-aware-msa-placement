@@ -64,13 +64,13 @@ Its generated inputs remain available in `debug-dir/`. Change `DEBUG_DIR` in
 Results are saved as:
 
 ```text
-output/network-sci/<trial>/output/application.pl
-output/network-sci/<trial>/output/infrastructure.pl
 results/parquets/network-sci/raw-sci-aware.parquet
 ```
 
-Each Ray Tune trial writes its generated inputs inside its own directory. Its
-result dictionary is collected with the other trials in the final Parquet file.
+Each Ray Tune trial generates its Prolog inputs in a temporary directory and
+deletes them after execution. Its result dictionary is collected with the
+other trials in the final Parquet file. Debug inputs remain available in
+`debug-dir/`.
 
 The Ray Tune search space is defined in
 `sci_aware_msa_placement/config.py` and covers:
@@ -87,19 +87,22 @@ The Ray Tune search space is defined in
 - RENATER Montpellier peak and off-peak route profiles
 - network embodied emissions fixed to zero
 - deterministic edge/cloud hardware-profile distributions
-- operational, embodied, component, network, objective, and total SCI outputs
+- component and network operational and embodied SCI outputs
 
 Set `FIX_TOPOLOGY_DENSITY = False` in `config.py` to evaluate all nine
 topology-density combinations instead of the three fixed scenarios.
 
+Existing Ray Tune state is restored by default. Unfinished trials resume and
+errored trials restart according to the `RESUME_*` and
+`RESTART_ERRORED_TRIALS` settings in `config.py`.
+
 ### Analyse Results
 
-The notebooks in `results/notebooks/` target the original experiment schema.
-They must be updated before analysing the new Ray Tune output:
+The notebook in `results-network/` reads the compact Parquet schema and derives
+aggregate SCI values from the four stored atomic SCI columns:
 
 ```text
-results/notebooks/clean-raw.ipynb
-results/notebooks/plot.ipynb
+results-network/analyse.ipynb
 ```
 
 ## Citation
