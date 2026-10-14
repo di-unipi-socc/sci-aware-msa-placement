@@ -19,8 +19,13 @@ ENCODING = "utf-8"
 
 # Experimental grid
 SEEDS = [151195, 30997, 50296, 42, 21297]
-APPLICATION_SIZES = [10, 20, 40]
-APPLICATION_TOPOLOGIES = ["erdos_renyi", "barabasi_albert", "watts_strogatz"]
+SYNTHETIC_APPLICATION_SIZES = [10, 20, 40]
+SYNTHETIC_APPLICATION_TOPOLOGIES = ["erdos_renyi", "barabasi_albert"]
+APPLICATIONS = [
+    {"topology": topology, "size": size}
+    for topology in SYNTHETIC_APPLICATION_TOPOLOGIES
+    for size in SYNTHETIC_APPLICATION_SIZES
+] + [{"topology": "online_boutique", "size": 10}]
 INFRASTRUCTURE_SIZES = [16, 32, 64, 128]
 INFRASTRUCTURE_TOPOLOGIES = [
     "erdos_renyi",
@@ -79,8 +84,7 @@ INFRASTRUCTURE_GRAPHS = (
 
 SEARCH_SPACE = {
     "seed": tune.grid_search(SEEDS),
-    "application_size": tune.grid_search(APPLICATION_SIZES),
-    "application_topology": tune.grid_search(APPLICATION_TOPOLOGIES),
+    "application": tune.grid_search(APPLICATIONS),
     "infrastructure_size": tune.grid_search(INFRASTRUCTURE_SIZES),
     "infrastructure_graph": tune.grid_search(INFRASTRUCTURE_GRAPHS),
     "heuristic": tune.grid_search(HEURISTICS),
@@ -91,8 +95,7 @@ SEARCH_SPACE = {
 
 DEBUG_CONFIG = {
     "seed": 42,
-    "application_size": 10,
-    "application_topology": "erdos_renyi",
+    "application": APPLICATIONS[0],
     "infrastructure_size": 16,
     "infrastructure_graph": FIXED_INFRASTRUCTURE_GRAPHS[0],
     "heuristic": "networkaware(0.33,0.33,0.34)",
@@ -105,14 +108,19 @@ DEBUG_CONFIG = {
 MIN_GRAPH_SIZE = 2
 ERDOS_RENYI_PROBABILITY = 0.20
 BARABASI_ALBERT_ATTACHMENTS = 2
-WATTS_STROGATZ_NEIGHBORS = 4
-WATTS_STROGATZ_REWIRE_PROBABILITY = 0.15
 AVERAGE_DEGREE_BY_DENSITY = {
     "sparse": 2,
     "medium": 4,
     "dense": 8,
 }
 ENDPOINT_COUNT = 6
+ONLINE_BOUTIQUE_PATH = (
+    PROJECT_ROOT
+    / "data"
+    / "applications"
+    / "online-boutique"
+    / "applicationFULLms-realistic.pl"
+)
 
 # Synthetic application
 CPU_REQUIREMENT_RANGE = (0.25, 1.50)

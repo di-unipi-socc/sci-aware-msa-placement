@@ -75,7 +75,8 @@ result dictionary is collected with the other trials in the final Parquet file.
 The Ray Tune search space is defined in
 `sci_aware_msa_placement/config.py` and covers:
 
-- synthetic applications with 10, 20, and 40 services
+- synthetic Erdős–Rényi and Barabási–Albert applications with 10, 20, and 40 services
+- the 10-service Online Boutique topology with randomized requirements and traffic
 - synthetic infrastructures with 16, 32, 64, and 128 nodes
 - native NetworkX Erdős–Rényi, Barabási–Albert, and Internet AS graphs
 - sparse, medium, and dense infrastructures with target mean degree 2, 4, and 8

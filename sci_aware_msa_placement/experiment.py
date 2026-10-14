@@ -77,6 +77,7 @@ class Experiment:
 
     def _base_result(self) -> dict[str, Any]:
         profile = self.parameters["route_profile"]
+        application = self.parameters["application"]
         graph = self.parameters["infrastructure_graph"]
         heuristic = self._heuristic_parameters()
         profile_counts = node_profile_counts(self.parameters["infrastructure_size"])
@@ -87,8 +88,8 @@ class Experiment:
         )
         return {
             "seed": self.parameters["seed"],
-            "application_size": self.parameters["application_size"],
-            "application_topology": self.parameters["application_topology"],
+            "application_size": application["size"],
+            "application_topology": application["topology"],
             "infrastructure_size": self.parameters["infrastructure_size"],
             "infrastructure_topology": graph["topology"],
             "infrastructure_density": graph["density"],
@@ -114,10 +115,6 @@ class Experiment:
             "interaction_gb_max": config.INTERACTION_GB_RANGE[1],
             "application_er_probability": config.ERDOS_RENYI_PROBABILITY,
             "application_ba_attachments": config.BARABASI_ALBERT_ATTACHMENTS,
-            "application_ws_neighbors": config.WATTS_STROGATZ_NEIGHBORS,
-            "application_ws_rewire_probability": (
-                config.WATTS_STROGATZ_REWIRE_PROBABILITY
-            ),
             "link_distance_km_min": config.LINK_DISTANCE_KM_RANGE[0],
             "link_distance_km_max": config.LINK_DISTANCE_KM_RANGE[1],
             "network_reference_distance_km": 700,

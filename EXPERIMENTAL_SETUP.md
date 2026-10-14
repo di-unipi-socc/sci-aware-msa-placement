@@ -9,23 +9,29 @@ runtime migrations are outside the current experiment.
 
 ## Applications
 
-Each application is generated from one seed, one size, and one graph topology.
-Independent deterministic random streams generate graph structure, interaction
-traffic, and service requirements. For a fixed seed and size, changing topology
-therefore does not also change service-resource requirements.
+Synthetic applications are generated from one seed, one size, and one graph
+topology. Independent deterministic random streams generate graph structure,
+interaction traffic, and service requirements. For a fixed seed and size,
+changing topology therefore does not also change service-resource requirements.
 
 | Parameter | Values |
 |---|---|
 | Seeds | `151195`, `30997`, `50296`, `42`, `21297` |
-| Services | 10, 20, 40 |
-| Topologies | Erdős–Rényi, Barabási–Albert, Watts–Strogatz |
+| Synthetic services | 10, 20, 40 |
+| Synthetic topologies | Erdős–Rényi, Barabási–Albert |
+| Real application topology | Online Boutique, 10 services |
 | Endpoints | 6 |
 | Functional units | 25,000,000 per year |
 
-Application graphs use the native NetworkX generators. Their parameters are
-`p = 0.20` for Erdős–Rényi, `m = 2` for Barabási–Albert, and `k = 4`, with
-rewiring probability `0.15`, for Watts–Strogatz. Disconnected components are
-joined after generation so every generated application is connected.
+Synthetic application graphs use the native NetworkX generators, with `p =
+0.20` for Erdős–Rényi and `m = 2` for Barabási–Albert. Disconnected components
+are joined after generation so every generated application is connected.
+
+Online Boutique preserves the services, endpoint interaction pairs, and
+endpoint probabilities from `applicationFULLms-realistic.pl`. Interaction
+volumes and all service requirements are resampled from the same ranges used
+for synthetic applications. Its existing requirements, traffic values, and
+functional-unit value are therefore not copied into generated trials.
 
 Each service independently receives the following requirements:
 
@@ -37,10 +43,10 @@ Each service independently receives the following requirements:
 | Outbound bandwidth | 0.01–0.40 | Gbit/s |
 | Time in reserve | 0.10–1.00 | years |
 
-Each application edge becomes an endpoint interaction. Its average traffic is
-sampled uniformly between 0.00005 and 0.005 GB, corresponding to approximately
-50 KB–5 MB. Edges are distributed over the six endpoints, whose invocation
-probabilities are random and normalized to sum to one.
+Each interaction receives average traffic sampled uniformly between 0.00005 and
+0.005 GB, corresponding to approximately 50 KB–5 MB. Synthetic graph edges are
+distributed over six endpoints with random probabilities normalized to one.
+Online Boutique retains its six original endpoint groups and probabilities.
 
 ## Infrastructure graphs
 
@@ -170,18 +176,18 @@ with `components_only` and `components_and_network` scopes.
 
 ## Grid size
 
-The default fixed topology-density setup contains 25,920 trials:
+The default fixed topology-density setup contains 20,160 trials:
 
-`5 seeds × 3 application sizes × 3 application topologies × 4 infrastructure sizes × 3 infrastructure scenarios × 12 heuristics × 2 scopes × 2 route profiles`.
+`5 seeds × 7 application scenarios × 4 infrastructure sizes × 3 infrastructure scenarios × 12 heuristics × 2 scopes × 2 route profiles`.
 
-The full topology-density product contains 77,760 trials.
+The full topology-density product contains 60,480 trials.
 
 ## Validation
 
 Profile counts were checked for every infrastructure size. Network-aware
-placements were tested over all application sizes, infrastructure sizes, and
-three fixed infrastructure scenarios. All 36 combinations produced a valid
-placement; easy cases used one node, while larger cases used multiple nodes and
+placements were tested over the three synthetic ER application sizes, all
+infrastructure sizes, and three fixed infrastructure scenarios. All 36
+combinations produced a valid placement; easy cases used one node, while larger cases used multiple nodes and
 exposed both component-dominated and network-dominated SCI. With the final
 NetworkX generators, this validation used between one and nine nodes and
 network SCI accounted for between 0% and 81.5% of total SCI. Here, nodes used

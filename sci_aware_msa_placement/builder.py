@@ -1,4 +1,6 @@
 import random
+import re
+from functools import cache
 from pathlib import Path
 
 import networkx as nx
@@ -13,28 +15,44 @@ def build_application(
     graph_rng = random.Random(seed)
     traffic_rng = random.Random(seed + 1_000_000)
     requirements_rng = random.Random(seed + 2_000_000)
-    size = parameters["application_size"]
-    topology = parameters["application_topology"]
-    application = f"synthetic_{topology}_{size}_{parameters['seed']}"
-    services = [f"service_{index}" for index in range(size)]
-    graph = _build_graph(size, topology, graph_rng)
-    edges = list(graph.edges)
-    traffic_rng.shuffle(edges)
-
-    endpoint_count = min(config.ENDPOINT_COUNT, len(edges))
-    interactions = [[] for _ in range(endpoint_count)]
-    interaction_volumes = [[] for _ in range(endpoint_count)]
-    for index, (source, target) in enumerate(edges):
-        avg_gb = traffic_rng.uniform(*config.INTERACTION_GB_RANGE)
-        interactions[index % endpoint_count].append(
-            f"({services[source]},{services[target]},{_number(avg_gb)})"
+    scenario = parameters["application"]
+    size = scenario["size"]
+    topology = scenario["topology"]
+    if topology == "online_boutique":
+        application = "onlineBoutique"
+        services, endpoints, interaction_pairs, probabilities = (
+            _online_boutique_topology()
         )
-        interaction_volumes[index % endpoint_count].append(avg_gb)
+    else:
+        application = f"synthetic_{topology}_{size}_{parameters['seed']}"
+        services = [f"service_{index}" for index in range(size)]
+        graph = _build_graph(size, topology, graph_rng)
+        edges = list(graph.edges)
+        traffic_rng.shuffle(edges)
+        endpoint_count = min(config.ENDPOINT_COUNT, len(edges))
+        endpoints = [f"endpoint_{index}" for index in range(endpoint_count)]
+        interaction_pairs = [[] for _ in endpoints]
+        for index, (source, target) in enumerate(edges):
+            interaction_pairs[index % endpoint_count].append(
+                (services[source], services[target])
+            )
+        weights = [traffic_rng.random() for _ in endpoints]
+        total_weight = sum(weights)
+        probabilities = [weight / total_weight for weight in weights]
 
-    weights = [traffic_rng.random() for _ in range(endpoint_count)]
-    total_weight = sum(weights)
-    probabilities = [weight / total_weight for weight in weights]
-    endpoints = [f"endpoint_{index}" for index in range(endpoint_count)]
+    interactions = []
+    interaction_volumes = []
+    for pairs in interaction_pairs:
+        endpoint_interactions = []
+        endpoint_volumes = []
+        for source, target in pairs:
+            avg_gb = traffic_rng.uniform(*config.INTERACTION_GB_RANGE)
+            endpoint_interactions.append(
+                f"({source},{target},{_number(avg_gb)})"
+            )
+            endpoint_volumes.append(avg_gb)
+        interactions.append(endpoint_interactions)
+        interaction_volumes.append(endpoint_volumes)
 
     lines = [
         f"application({application},[{','.join(services)}],[{','.join(endpoints)}]).",
@@ -76,8 +94,8 @@ def build_application(
     path.write_text("\n".join(lines) + "\n", encoding=config.ENCODING)
     all_volumes = [volume for volumes in interaction_volumes for volume in volumes]
     metadata = {
-        "application_edges": len(edges),
-        "actual_endpoint_count": endpoint_count,
+        "application_edges": sum(len(pairs) for pairs in interaction_pairs),
+        "actual_endpoint_count": len(endpoints),
         "average_interaction_gb": sum(all_volumes) / len(all_volumes),
         "expected_traffic_gb_per_invocation": sum(
             probability * sum(volumes)
@@ -87,6 +105,46 @@ def build_application(
         ),
     }
     return path, application, metadata
+
+
+@cache
+def _online_boutique_topology() -> tuple[
+    list[str], list[str], list[list[tuple[str, str]]], list[float]
+]:
+    source = config.ONLINE_BOUTIQUE_PATH.read_text(encoding=config.ENCODING)
+    source = re.sub(r"%.*", "", source)
+    application = re.search(
+        r"application\(onlineBoutique,\s*\[(.*?)\],\s*\[(.*?)\]\)\.",
+        source,
+        re.DOTALL,
+    )
+    services = _atoms(application.group(1))
+    endpoints = _atoms(application.group(2))
+    endpoint_bodies = dict(
+        re.findall(r"endpoint\((\w+),\s*\[(.*?)\]\)\.", source, re.DOTALL)
+    )
+    interactions = [
+        [
+            (source_service, target_service)
+            for source_service, target_service in re.findall(
+                r"\(\s*(\w+)\s*,\s*(\w+)\s*,\s*[^)]+\)",
+                endpoint_bodies[endpoint],
+            )
+        ]
+        for endpoint in endpoints
+    ]
+    probability_by_endpoint = {
+        endpoint: float(probability)
+        for endpoint, probability in re.findall(
+            r"probability\((\w+),\s*([0-9.]+)\)\.", source
+        )
+    }
+    probabilities = [probability_by_endpoint[endpoint] for endpoint in endpoints]
+    return services, endpoints, interactions, probabilities
+
+
+def _atoms(raw_atoms: str) -> list[str]:
+    return [atom.strip() for atom in raw_atoms.split(",")]
 
 
 def build_network(parameters: dict, output_dir: Path) -> tuple[Path, dict]:
@@ -238,15 +296,6 @@ def _build_graph(
         )
         graph = nx.barabasi_albert_graph(
             size, min(attachments, size - 1), seed=rng
-        )
-    elif topology == "watts_strogatz":
-        neighbors = min(config.WATTS_STROGATZ_NEIGHBORS, size - 1)
-        neighbors -= neighbors % 2
-        graph = nx.watts_strogatz_graph(
-            size,
-            neighbors,
-            config.WATTS_STROGATZ_REWIRE_PROBABILITY,
-            seed=rng,
         )
     elif topology == "internet_as_graph" and average_degree is not None:
         graph = _internet_as_graph(size, rng, average_degree)
