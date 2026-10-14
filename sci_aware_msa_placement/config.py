@@ -5,6 +5,7 @@ from ray import tune
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "output"
+DEBUG_DIR = PROJECT_ROOT / "debug-dir"
 RESULTS_DIR = PROJECT_ROOT / "results"
 PARQUETS_DIR = RESULTS_DIR / "parquets"
 PROLOG_DIR = PROJECT_ROOT / "prolog"
@@ -13,17 +14,27 @@ PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 # Execution
 EXPERIMENT_NAME = "network-sci"
 RAY_ADDRESS = "auto"
-TIMEOUT_SECONDS = 1800
+TIMEOUT_SECONDS = 900
 ENCODING = "utf-8"
 
 # Experimental grid
 SEEDS = [151195, 30997, 50296, 42, 21297]
 APPLICATION_SIZES = [10, 20, 40]
 APPLICATION_TOPOLOGIES = ["erdos_renyi", "barabasi_albert", "watts_strogatz"]
-INFRASTRUCTURE_SIZES = [16, 32, 64]
-INFRASTRUCTURE_TOPOLOGIES = ["erdos_renyi", "barabasi_albert", "watts_strogatz"]
-TOP_K_VALUES = [1, 10, 100]
-NETWORK_WEIGHTS = [(0.33, 0.33, 0.34), (0.50, 0.25, 0.25), (0.25, 0.25, 0.50)]
+INFRASTRUCTURE_SIZES = [16, 32, 64, 128]
+INFRASTRUCTURE_TOPOLOGIES = [
+    "erdos_renyi",
+    "barabasi_albert",
+    "internet_as_graph",
+]
+INFRASTRUCTURE_DENSITIES = ["sparse", "medium", "dense"]
+TOP_K_VALUES = [1, 100, 1000]
+NETWORK_WEIGHTS = [
+    (0.33, 0.33, 0.34),
+    (0.60, 0.20, 0.20),
+    (0.20, 0.60, 0.20),
+    (0.20, 0.20, 0.60),
+]
 HEURISTICS = [
     *(f"capacityonly({k})" for k in TOP_K_VALUES),
     *(f"greenonly({k})" for k in TOP_K_VALUES),
@@ -47,18 +58,35 @@ ROUTE_PROFILES = [
         "embodied_per_gb": 0.000493,
     },
 ]
-INCLUDE_NETWORK_EMBODIED = [False, True]
+INCLUDE_NETWORK_EMBODIED = False
+FIX_TOPOLOGY_DENSITY = True
+
+FIXED_INFRASTRUCTURE_GRAPHS = [
+    {"topology": "erdos_renyi", "density": "dense"},
+    {"topology": "barabasi_albert", "density": "medium"},
+    {"topology": "internet_as_graph", "density": "sparse"},
+]
+VARIABLE_INFRASTRUCTURE_GRAPHS = [
+    {"topology": topology, "density": density}
+    for topology in INFRASTRUCTURE_TOPOLOGIES
+    for density in INFRASTRUCTURE_DENSITIES
+]
+INFRASTRUCTURE_GRAPHS = (
+    FIXED_INFRASTRUCTURE_GRAPHS
+    if FIX_TOPOLOGY_DENSITY
+    else VARIABLE_INFRASTRUCTURE_GRAPHS
+)
 
 SEARCH_SPACE = {
     "seed": tune.grid_search(SEEDS),
     "application_size": tune.grid_search(APPLICATION_SIZES),
     "application_topology": tune.grid_search(APPLICATION_TOPOLOGIES),
     "infrastructure_size": tune.grid_search(INFRASTRUCTURE_SIZES),
-    "infrastructure_topology": tune.grid_search(INFRASTRUCTURE_TOPOLOGIES),
+    "infrastructure_graph": tune.grid_search(INFRASTRUCTURE_GRAPHS),
     "heuristic": tune.grid_search(HEURISTICS),
     "scope": tune.grid_search(SCOPES),
     "route_profile": tune.grid_search(ROUTE_PROFILES),
-    "include_network_embodied": False,  # tune.grid_search(INCLUDE_NETWORK_EMBODIED),
+    "include_network_embodied": INCLUDE_NETWORK_EMBODIED,
 }
 
 DEBUG_CONFIG = {
@@ -66,35 +94,83 @@ DEBUG_CONFIG = {
     "application_size": 10,
     "application_topology": "erdos_renyi",
     "infrastructure_size": 16,
-    "infrastructure_topology": "erdos_renyi",
+    "infrastructure_graph": FIXED_INFRASTRUCTURE_GRAPHS[0],
     "heuristic": "networkaware(0.33,0.33,0.34)",
     "scope": "components_and_network",
     "route_profile": ROUTE_PROFILES[0],
-    "include_network_embodied": False,
+    "include_network_embodied": INCLUDE_NETWORK_EMBODIED,
 }
 
 # Graph generation
+MIN_GRAPH_SIZE = 2
 ERDOS_RENYI_PROBABILITY = 0.20
 BARABASI_ALBERT_ATTACHMENTS = 2
 WATTS_STROGATZ_NEIGHBORS = 4
 WATTS_STROGATZ_REWIRE_PROBABILITY = 0.15
+AVERAGE_DEGREE_BY_DENSITY = {
+    "sparse": 2,
+    "medium": 4,
+    "dense": 8,
+}
 ENDPOINT_COUNT = 6
 
 # Synthetic application
-CPU_REQUIREMENT_RANGE = (0.10, 1.00)
-RAM_REQUIREMENT_RANGE = (0.25, 2.00)
-BANDWIDTH_REQUIREMENT_RANGE = (0.01, 0.25)
+CPU_REQUIREMENT_RANGE = (0.25, 1.50)
+RAM_REQUIREMENT_RANGE = (0.50, 4.00)
+BANDWIDTH_REQUIREMENT_RANGE = (0.01, 0.40)
 TIME_IN_RESERVE_RANGE = (0.10, 1.00)
-INTERACTION_GB_RANGE = (0.000005, 0.0005)
+INTERACTION_GB_RANGE = (0.00005, 0.005)
 FUNCTIONAL_UNITS = 25_000_000
 
 # Synthetic infrastructure
-NODE_CPU_RANGE = (2, 16)
-NODE_RAM_RANGE = (4.0, 32.0)
-NODE_BANDWIDTH_RANGE = (1.0, 10.0)
-POWER_PER_CPU_RANGE = (0.003, 0.010)
+NODE_RESOURCE_PROFILES = [
+    {
+        "name": "edge_small",
+        "percentage": 30,
+        "cpu": 2,
+        "ram": 4.0,
+        "bandwidth": 1.0,
+        "power_per_cpu": 0.003,
+        "embodied_emissions": 100.0,
+    },
+    {
+        "name": "edge_medium",
+        "percentage": 30,
+        "cpu": 4,
+        "ram": 8.0,
+        "bandwidth": 2.5,
+        "power_per_cpu": 0.004,
+        "embodied_emissions": 160.0,
+    },
+    {
+        "name": "edge_large",
+        "percentage": 20,
+        "cpu": 8,
+        "ram": 16.0,
+        "bandwidth": 5.0,
+        "power_per_cpu": 0.005,
+        "embodied_emissions": 260.0,
+    },
+    {
+        "name": "cloud_medium",
+        "percentage": 15,
+        "cpu": 16,
+        "ram": 32.0,
+        "bandwidth": 10.0,
+        "power_per_cpu": 0.007,
+        "embodied_emissions": 420.0,
+    },
+    {
+        "name": "cloud_large",
+        "percentage": 5,
+        "cpu": 32,
+        "ram": 64.0,
+        "bandwidth": 25.0,
+        "power_per_cpu": 0.009,
+        "embodied_emissions": 600.0,
+    },
+]
 EXPECTED_LIFETIME_RANGE = (3.0, 7.0)
-TOTAL_EMBODIED_EMISSIONS_RANGE = (100.0, 600.0)
 PUE_RANGE = (1.05, 1.60)
 CARBON_INTENSITY_RANGE = (0.03, 0.70)
 LINK_DISTANCE_KM_RANGE = (20.0, 1200.0)

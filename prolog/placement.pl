@@ -50,32 +50,44 @@ sumHWReqs([rr(CPU,RAM,BWin,BWout)|RRs], rr(TCPU,TRAM,TBWin,TBWout)) :-
     TBWout is AccBWout + BWout.
 sumHWReqs([], rr(0,0,0,0)).
 
-sci(EPs, R, P, SCI) :- sci(EPs,R,P,0,SCI).
-sci([EP|EPs], R, P, OldSCI, NewSCI) :-
-    endpointSCI(EP,R,P,EPSCI),
-    TmpSCI is OldSCI + EPSCI,
-    sci(EPs,R,P,TmpSCI,NewSCI).
-sci([],_,_,SCI,SCI).
+sci(EPs, R, P, SCI) :-
+    sci(EPs, R, P, Operational, Embodied),
+    SCI is Operational + Embodied.
+sci([EP|EPs], R, P, Operational, Embodied) :-
+    endpointSCI(EP, R, P, CurrentOperational, CurrentEmbodied),
+    sci(EPs, R, P, RestOperational, RestEmbodied),
+    Operational is CurrentOperational + RestOperational,
+    Embodied is CurrentEmbodied + RestEmbodied.
+sci([], _, _, 0, 0).
 
 endpointSCI(EP, R, P, SCI) :-
+    endpointSCI(EP, R, P, Operational, Embodied),
+    SCI is Operational + Embodied.
+endpointSCI(EP, R, P, Operational, Embodied) :-
     endpointServices(EP, Sequence),
     sort(Sequence, EPMs),
     findall(on(Ms,N), (member(Ms,EPMs), member(on(Ms,N),P)), FilteredP),
     probability(EP, Prob),
-    carbonEmissions(FilteredP, C),
-    SCI is (C / R) * Prob.
+    carbonEmissions(FilteredP, OperationalCarbon, EmbodiedCarbon),
+    Operational is (OperationalCarbon / R) * Prob,
+    Embodied is (EmbodiedCarbon / R) * Prob.
 
-carbonEmissions([on(Ms,N)|P], C) :-
-    carbonEmissions(P, AccC),
+carbonEmissions(P, C) :-
+    carbonEmissions(P, Operational, Embodied),
+    C is Operational + Embodied.
+
+carbonEmissions([on(Ms,N)|P], Operational, Embodied) :-
+    carbonEmissions(P, RestOperational, RestEmbodied),
     operationalCarbon(N, Ms, O),
     embodiedCarbon(N, Ms, E),
-    C is AccC + O + E.
-carbonEmissions([], 0).
+    Operational is RestOperational + O,
+    Embodied is RestEmbodied + E.
+carbonEmissions([], 0, 0).
 
 operationalEnergy(N, Ms, E) :-
     node(N, _, PowerPerCPU, _, _, PUE),
-    microservice(Ms, _, TiR),
-    E is PUE * (TiR * 365 * 24) * PowerPerCPU.
+    microservice(Ms, rr(CPUReq,_,_,_), TiR),
+    E is PUE * (TiR * 365 * 24) * PowerPerCPU * CPUReq.
 
 operationalCarbon(N, Ms, O) :-
     carbon_intensity(N, I),

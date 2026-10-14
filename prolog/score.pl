@@ -104,7 +104,7 @@ normalizedLowerScore(Value, Values, Score) :-
     min_list(Values, Min), max_list(Values, Max),
     normalizedLowerScore(Value, Min, Max, Score).
 
-normalizedLowerScore(_, M, M, 0).
+normalizedLowerScore(_, Min, Max, 0) :- Min =:= Max.
 normalizedLowerScore(Value, Min, Max, Score) :-
     Min =\= Max,
     Score is (Value - Min) / (Max - Min).
@@ -113,7 +113,7 @@ normalizedHigherScore(Value, Values, Score) :-
     min_list(Values, Min), max_list(Values, Max),
     normalizedHigherScore(Value, Min, Max, Score).
 
-normalizedHigherScore(_, M, M, 0).
+normalizedHigherScore(_, Min, Max, 0) :- Min =:= Max.
 normalizedHigherScore(Value, Min, Max, Score) :-
     Min =\= Max,
     Score is (Max - Value) / (Max - Min).

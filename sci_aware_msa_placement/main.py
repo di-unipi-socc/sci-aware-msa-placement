@@ -1,20 +1,20 @@
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import ray
 from ray import tune
-from ray.air import RunConfig
+from ray.tune import RunConfig
 
 from sci_aware_msa_placement import config
 from sci_aware_msa_placement.experiment import Experiment
 
 
 def run_experiment(parameters: dict) -> dict:
-    with TemporaryDirectory() as work_dir:
-        return Experiment(parameters, Path(work_dir)).run()
+    output_dir = Path(tune.get_context().get_trial_dir()) / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return Experiment(parameters, output_dir).run()
 
 
-def main() -> Path:
+def main() -> None:
     if not ray.is_initialized():
         ray.init(address=config.RAY_ADDRESS)
 
@@ -31,10 +31,9 @@ def main() -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "raw-sci-aware.parquet"
     results.get_dataframe().to_parquet(output_path, index=False)
-    return output_path
+    print(f"Results saved to {output_path}")
 
 
-def debug_main() -> dict:
-    result = run_experiment(config.DEBUG_CONFIG)
-    print(result)
-    return result
+def debug_main() -> None:
+    config.DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    print(Experiment(config.DEBUG_CONFIG, config.DEBUG_DIR).run())

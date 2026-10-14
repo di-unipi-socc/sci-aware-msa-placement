@@ -118,9 +118,12 @@ movePlacement(P, [on(M,NewN)|Rest]) :-
     placementNode(NewN, Rest, RR).
 
 componentPlacementSCI(App, P, SCI) :-
+    componentPlacementSCI(App, P, Operational, Embodied),
+    SCI is Operational + Embodied.
+componentPlacementSCI(App, P, Operational, Embodied) :-
     application(App, _, Endpoints),
     functionalUnits(App, FunctionalUnits),
-    sci(Endpoints, FunctionalUnits, P, SCI).
+    sci(Endpoints, FunctionalUnits, P, Operational, Embodied).
 
 placementSCI(components_only, App, P, SCI) :-
     componentPlacementSCI(App, P, SCI).

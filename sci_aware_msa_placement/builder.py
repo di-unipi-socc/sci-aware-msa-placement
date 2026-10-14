@@ -1,28 +1,37 @@
-import heapq
 import random
 from pathlib import Path
+
+import networkx as nx
 
 from sci_aware_msa_placement import config
 
 
-def build_application(parameters: dict, output_dir: Path) -> tuple[Path, str]:
-    rng = random.Random(parameters["seed"])
+def build_application(
+    parameters: dict, output_dir: Path
+) -> tuple[Path, str, dict]:
+    seed = parameters["seed"]
+    graph_rng = random.Random(seed)
+    traffic_rng = random.Random(seed + 1_000_000)
+    requirements_rng = random.Random(seed + 2_000_000)
     size = parameters["application_size"]
     topology = parameters["application_topology"]
     application = f"synthetic_{topology}_{size}_{parameters['seed']}"
     services = [f"service_{index}" for index in range(size)]
-    edges = _graph_edges(size, topology, rng)
-    rng.shuffle(edges)
+    graph = _build_graph(size, topology, graph_rng)
+    edges = list(graph.edges)
+    traffic_rng.shuffle(edges)
 
     endpoint_count = min(config.ENDPOINT_COUNT, len(edges))
     interactions = [[] for _ in range(endpoint_count)]
+    interaction_volumes = [[] for _ in range(endpoint_count)]
     for index, (source, target) in enumerate(edges):
-        avg_gb = rng.uniform(*config.INTERACTION_GB_RANGE)
+        avg_gb = traffic_rng.uniform(*config.INTERACTION_GB_RANGE)
         interactions[index % endpoint_count].append(
             f"({services[source]},{services[target]},{_number(avg_gb)})"
         )
+        interaction_volumes[index % endpoint_count].append(avg_gb)
 
-    weights = [rng.random() for _ in range(endpoint_count)]
+    weights = [traffic_rng.random() for _ in range(endpoint_count)]
     total_weight = sum(weights)
     probabilities = [weight / total_weight for weight in weights]
     endpoints = [f"endpoint_{index}" for index in range(endpoint_count)]
@@ -32,191 +41,256 @@ def build_application(parameters: dict, output_dir: Path) -> tuple[Path, str]:
         "",
     ]
     for service in services:
-        cpu = rng.uniform(*config.CPU_REQUIREMENT_RANGE)
-        ram = rng.uniform(*config.RAM_REQUIREMENT_RANGE)
-        bandwidth_in = rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
-        bandwidth_out = rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
-        time_in_reserve = rng.uniform(*config.TIME_IN_RESERVE_RANGE)
+        cpu = requirements_rng.uniform(*config.CPU_REQUIREMENT_RANGE)
+        ram = requirements_rng.uniform(*config.RAM_REQUIREMENT_RANGE)
+        bandwidth_in = requirements_rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
+        bandwidth_out = requirements_rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
+        time_in_reserve = requirements_rng.uniform(*config.TIME_IN_RESERVE_RANGE)
         lines.append(
             f"microservice({service},rr({_number(cpu)},{_number(ram)},"
             f"{_number(bandwidth_in)},{_number(bandwidth_out)}),"
             f"{_number(time_in_reserve)})."
         )
 
-    lines.append("")
+    endpoint_lines = []
+    probability_lines = []
     for endpoint, pairs, probability in zip(
         endpoints, interactions, probabilities, strict=True
     ):
-        lines.append(f"endpoint({endpoint},[{','.join(pairs)}]).")
-        lines.append(f"probability({endpoint},{_number(probability)}).")
-
-    lines.extend(["", f"functionalUnits({application},{config.FUNCTIONAL_UNITS})."])
-    path = output_dir / "application.pl"
-    path.write_text("\n".join(lines) + "\n", encoding=config.ENCODING)
-    return path, application
-
-
-def build_network(parameters: dict, output_dir: Path) -> Path:
-    rng = random.Random(parameters["seed"] + 1)
-    size = parameters["infrastructure_size"]
-    topology = parameters["infrastructure_topology"]
-    profile = parameters["route_profile"]
-    embodied_per_gb = (
-        profile["embodied_per_gb"]
-        if parameters["include_network_embodied"]
-        else 0.0
-    )
-    nodes = [f"node_{index}" for index in range(size)]
-    edges = _graph_edges(size, topology, rng)
-    weighted_edges = [
-        (source, target, rng.uniform(*config.LINK_DISTANCE_KM_RANGE))
-        for source, target in edges
-    ]
-
-    lines = []
-    for node in nodes:
-        cpu = rng.randint(*config.NODE_CPU_RANGE)
-        ram = rng.uniform(*config.NODE_RAM_RANGE)
-        bandwidth_in = rng.uniform(*config.NODE_BANDWIDTH_RANGE)
-        bandwidth_out = rng.uniform(*config.NODE_BANDWIDTH_RANGE)
-        power = rng.uniform(*config.POWER_PER_CPU_RANGE)
-        lifetime = rng.uniform(*config.EXPECTED_LIFETIME_RANGE)
-        embodied = rng.uniform(*config.TOTAL_EMBODIED_EMISSIONS_RANGE)
-        pue = rng.uniform(*config.PUE_RANGE)
-        carbon_intensity = rng.uniform(*config.CARBON_INTENSITY_RANGE)
-        lines.append(
-            f"node({node},tor({cpu},{_number(ram)},{_number(bandwidth_in)},"
-            f"{_number(bandwidth_out)}),{_number(power)},{_number(lifetime)},"
-            f"{_number(embodied)},{_number(pue)})."
+        endpoint_lines.append(f"endpoint({endpoint},[{','.join(pairs)}]).")
+        probability_lines.append(
+            f"probability({endpoint},{_number(probability)})."
         )
-        lines.append(f"carbon_intensity({node},{_number(carbon_intensity)}).")
 
     lines.extend(
         [
             "",
-            f"routeProfile({profile['name']},{profile['operational_per_gb']},"
+            *endpoint_lines,
+            "",
+            *probability_lines,
+            "",
+            f"functionalUnits({application},{config.FUNCTIONAL_UNITS}).",
+        ]
+    )
+    path = output_dir / "application.pl"
+    path.write_text("\n".join(lines) + "\n", encoding=config.ENCODING)
+    all_volumes = [volume for volumes in interaction_volumes for volume in volumes]
+    metadata = {
+        "application_edges": len(edges),
+        "actual_endpoint_count": endpoint_count,
+        "average_interaction_gb": sum(all_volumes) / len(all_volumes),
+        "expected_traffic_gb_per_invocation": sum(
+            probability * sum(volumes)
+            for probability, volumes in zip(
+                probabilities, interaction_volumes, strict=True
+            )
+        ),
+    }
+    return path, application, metadata
+
+
+def build_network(parameters: dict, output_dir: Path) -> tuple[Path, dict]:
+    seed = parameters["seed"]
+    profile_rng = random.Random(seed + 3_000_000)
+    graph_rng = random.Random(seed + 4_000_000)
+    distance_rng = random.Random(seed + 5_000_000)
+    site_rng = random.Random(seed + 6_000_000)
+    size = parameters["infrastructure_size"]
+    graph = parameters["infrastructure_graph"]
+    topology = graph["topology"]
+    average_degree = config.AVERAGE_DEGREE_BY_DENSITY[
+        graph["density"]
+    ]
+    route_profile = parameters["route_profile"]
+    embodied_per_gb = (
+        route_profile["embodied_per_gb"]
+        if parameters["include_network_embodied"]
+        else 0.0
+    )
+    nodes = [f"node_{index}" for index in range(size)]
+    profiles = _node_profiles(size, profile_rng)
+    network = _build_graph(size, topology, graph_rng, average_degree)
+    for source, target in network.edges:
+        network[source][target]["distance"] = distance_rng.uniform(
+            *config.LINK_DISTANCE_KM_RANGE
+        )
+
+    node_lines = []
+    carbon_intensity_lines = []
+    for node, node_profile in zip(nodes, profiles, strict=True):
+        cpu = node_profile["cpu"]
+        ram = node_profile["ram"]
+        bandwidth_in = node_profile["bandwidth"]
+        bandwidth_out = node_profile["bandwidth"]
+        power = node_profile["power_per_cpu"]
+        lifetime = site_rng.uniform(*config.EXPECTED_LIFETIME_RANGE)
+        embodied = node_profile["embodied_emissions"]
+        pue = site_rng.uniform(*config.PUE_RANGE)
+        carbon_intensity = site_rng.uniform(*config.CARBON_INTENSITY_RANGE)
+        node_lines.append(
+            f"node({node},tor({cpu},{_number(ram)},{_number(bandwidth_in)},"
+            f"{_number(bandwidth_out)}),{_number(power)},{_number(lifetime)},"
+            f"{_number(embodied)},{_number(pue)})."
+        )
+        carbon_intensity_lines.append(
+            f"carbon_intensity({node},{_number(carbon_intensity)})."
+        )
+
+    lines = [
+        *node_lines,
+        "",
+        *carbon_intensity_lines,
+    ]
+    lines.extend(
+        [
+            "",
+            f"routeProfile({route_profile['name']},"
+            f"{route_profile['operational_per_gb']},"
             f"{embodied_per_gb}).",
             "",
         ]
     )
-    distances = _shortest_distances(size, weighted_edges)
+    distances = dict(
+        nx.all_pairs_dijkstra_path_length(network, weight="distance")
+    )
     for source in range(size):
         for target in range(size):
             if source != target:
                 lines.append(
                     f"route({nodes[source]},{nodes[target]},"
-                    f"{_number(distances[source][target])},{profile['name']})."
+                    f"{_number(distances[source][target])},"
+                    f"{route_profile['name']})."
                 )
 
     path = output_dir / "infrastructure.pl"
     path.write_text("\n".join(lines) + "\n", encoding=config.ENCODING)
-    return path
-
-
-def _graph_edges(size: int, topology: str, rng: random.Random) -> list[tuple[int, int]]:
-    if size < 2:
-        raise ValueError("Graph size must be at least 2")
-    if topology == "erdos_renyi":
-        edges = _erdos_renyi(size, rng)
-    elif topology == "barabasi_albert":
-        edges = _barabasi_albert(size, rng)
-    elif topology == "watts_strogatz":
-        edges = _watts_strogatz(size, rng)
-    else:
-        raise ValueError(f"Unknown topology: {topology}")
-    return sorted(_connect_components(size, edges))
-
-
-def _erdos_renyi(size: int, rng: random.Random) -> set[tuple[int, int]]:
-    return {
-        (source, target)
+    route_distances = [
+        distances[source][target]
         for source in range(size)
         for target in range(source + 1, size)
-        if rng.random() < config.ERDOS_RENYI_PROBABILITY
+    ]
+    metadata = {
+        "physical_links": network.number_of_edges(),
+        "actual_mean_degree": 2 * network.number_of_edges() / size,
+        "average_physical_link_distance_km": (
+            sum(
+                attributes["distance"]
+                for _, _, attributes in network.edges(data=True)
+            )
+            / network.number_of_edges()
+        ),
+        "average_route_distance_km": sum(route_distances) / len(route_distances),
+        "maximum_route_distance_km": max(route_distances),
+    }
+    return path, metadata
+
+
+def _node_profiles(size: int, rng: random.Random) -> list[dict]:
+    profiles = config.NODE_RESOURCE_PROFILES
+    counts = node_profile_counts(size)
+    assignments = [
+        profile
+        for profile in profiles
+        for _ in range(counts[profile["name"]])
+    ]
+    rng.shuffle(assignments)
+    return assignments
+
+
+def node_profile_counts(size: int) -> dict[str, int]:
+    profiles = config.NODE_RESOURCE_PROFILES
+    weighted_counts = [size * profile["percentage"] for profile in profiles]
+    counts = [count // 100 for count in weighted_counts]
+    remaining = size - sum(counts)
+    remainders = sorted(
+        range(len(profiles)),
+        key=lambda index: weighted_counts[index] % 100,
+        reverse=True,
+    )
+    for index in remainders[:remaining]:
+        counts[index] += 1
+    return {
+        profile["name"]: count
+        for profile, count in zip(profiles, counts, strict=True)
     }
 
 
-def _barabasi_albert(size: int, rng: random.Random) -> set[tuple[int, int]]:
-    attachments = min(config.BARABASI_ALBERT_ATTACHMENTS, size - 1)
-    initial_size = attachments + 1
-    edges = {
-        (source, target)
-        for source in range(initial_size)
-        for target in range(source + 1, initial_size)
-    }
-    degrees = [initial_size - 1] * initial_size
-    for node in range(initial_size, size):
-        targets = set()
-        while len(targets) < attachments:
-            targets.add(rng.choices(range(node), weights=degrees, k=1)[0])
-        degrees.append(0)
-        for target in targets:
-            edges.add((target, node))
-            degrees[target] += 1
-            degrees[node] += 1
-    return edges
+def _build_graph(
+    size: int,
+    topology: str,
+    rng: random.Random,
+    average_degree: int | None = None,
+) -> nx.Graph:
+    if size < config.MIN_GRAPH_SIZE:
+        raise ValueError(f"Graph size must be at least {config.MIN_GRAPH_SIZE}")
+    if topology == "erdos_renyi":
+        probability = (
+            config.ERDOS_RENYI_PROBABILITY
+            if average_degree is None
+            else min(average_degree / (size - 1), 1.0)
+        )
+        graph = nx.erdos_renyi_graph(size, probability, seed=rng)
+    elif topology == "barabasi_albert":
+        attachments = (
+            config.BARABASI_ALBERT_ATTACHMENTS
+            if average_degree is None
+            else max(1, round(average_degree / 2))
+        )
+        graph = nx.barabasi_albert_graph(
+            size, min(attachments, size - 1), seed=rng
+        )
+    elif topology == "watts_strogatz":
+        neighbors = min(config.WATTS_STROGATZ_NEIGHBORS, size - 1)
+        neighbors -= neighbors % 2
+        graph = nx.watts_strogatz_graph(
+            size,
+            neighbors,
+            config.WATTS_STROGATZ_REWIRE_PROBABILITY,
+            seed=rng,
+        )
+    elif topology == "internet_as_graph" and average_degree is not None:
+        graph = _internet_as_graph(size, rng, average_degree)
+    else:
+        raise ValueError(f"Unknown topology: {topology}")
+    _connect_components(graph)
+    return graph
 
 
-def _watts_strogatz(size: int, rng: random.Random) -> set[tuple[int, int]]:
-    neighbors = min(config.WATTS_STROGATZ_NEIGHBORS, size - 1)
-    neighbors -= neighbors % 2
-    edges = set()
-    for source in range(size):
-        for offset in range(1, neighbors // 2 + 1):
-            target = (source + offset) % size
-            edge = tuple(sorted((source, target)))
-            if rng.random() < config.WATTS_STROGATZ_REWIRE_PROBABILITY:
-                candidates = [
-                    node
-                    for node in range(size)
-                    if node != source and tuple(sorted((source, node))) not in edges
-                ]
-                if candidates:
-                    edge = tuple(sorted((source, rng.choice(candidates))))
-            edges.add(edge)
-    return edges
+def _internet_as_graph(
+    size: int, rng: random.Random, average_degree: int
+) -> nx.Graph:
+    graph = nx.random_internet_as_graph(size, seed=rng)
+    target_edges = min(
+        max(size - 1, round(size * average_degree / 2)),
+        size * (size - 1) // 2,
+    )
+    _resize_connected_graph(graph, target_edges, rng)
+    return graph
 
 
-def _connect_components(
-    size: int, edges: set[tuple[int, int]]
-) -> set[tuple[int, int]]:
-    connected = {0}
-    while len(connected) < size:
-        expanded = connected | {
-            target for source, target in edges if source in connected
-        } | {source for source, target in edges if target in connected}
-        if expanded == connected:
-            target = min(set(range(size)) - connected)
-            edges.add((min(connected), target))
-            expanded.add(target)
-        connected = expanded
-    return edges
+def _resize_connected_graph(
+    graph: nx.Graph, target_edges: int, rng: random.Random
+) -> None:
+    removable_edges = list(graph.edges)
+    rng.shuffle(removable_edges)
+    for source, target in removable_edges:
+        if graph.number_of_edges() <= target_edges:
+            break
+        graph.remove_edge(source, target)
+        if not nx.is_connected(graph):
+            graph.add_edge(source, target)
+
+    missing_edges = list(nx.non_edges(graph))
+    rng.shuffle(missing_edges)
+    graph.add_edges_from(
+        missing_edges[: target_edges - graph.number_of_edges()]
+    )
 
 
-def _shortest_distances(
-    size: int, edges: list[tuple[int, int, float]]
-) -> list[list[float]]:
-    adjacency = [[] for _ in range(size)]
-    for source, target, distance in edges:
-        adjacency[source].append((target, distance))
-        adjacency[target].append((source, distance))
-
-    distances = []
-    for origin in range(size):
-        current = [float("inf")] * size
-        current[origin] = 0.0
-        queue = [(0.0, origin)]
-        while queue:
-            distance, node = heapq.heappop(queue)
-            if distance != current[node]:
-                continue
-            for neighbor, weight in adjacency[node]:
-                candidate = distance + weight
-                if candidate < current[neighbor]:
-                    current[neighbor] = candidate
-                    heapq.heappush(queue, (candidate, neighbor))
-        distances.append(current)
-    return distances
+def _connect_components(graph: nx.Graph) -> None:
+    components = sorted(nx.connected_components(graph), key=min)
+    anchor = min(components[0])
+    graph.add_edges_from((anchor, min(component)) for component in components[1:])
 
 
 def _number(value: float) -> str:

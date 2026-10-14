@@ -49,7 +49,7 @@ Start or connect to a Ray cluster, then run the main entrypoint:
 
 ```bash
 uv run ray start --head --port 0
-uv run --active sci-aware 
+uv run experiments
 ```
 
 Run the single configuration defined as `DEBUG_CONFIG` in `config.py` with:
@@ -58,28 +58,43 @@ Run the single configuration defined as `DEBUG_CONFIG` in `config.py` with:
 uv run --active debug
 ```
 
+Its generated inputs remain available in `debug-dir/`. Change `DEBUG_DIR` in
+`sci_aware_msa_placement/config.py` to use another location.
+
 Results are saved as:
 
 ```text
+output/network-sci/<trial>/output/application.pl
+output/network-sci/<trial>/output/infrastructure.pl
 results/parquets/network-sci/raw-sci-aware.parquet
 ```
+
+Each Ray Tune trial writes its generated inputs inside its own directory. Its
+result dictionary is collected with the other trials in the final Parquet file.
 
 The Ray Tune search space is defined in
 `sci_aware_msa_placement/config.py` and covers:
 
 - synthetic applications with 10, 20, and 40 services
-- synthetic infrastructures with 16, 32, and 64 nodes
-- Erdős–Rényi, Barabási–Albert, and Watts–Strogatz graphs
+- synthetic infrastructures with 16, 32, 64, and 128 nodes
+- native NetworkX Erdős–Rényi, Barabási–Albert, and Internet AS graphs
+- sparse, medium, and dense infrastructures with target mean degree 2, 4, and 8
+- fixed topology-density scenarios by default: ER-dense, BA-medium, and AS-sparse
 - component-only and component-plus-network SCI
 - top-k, network-aware, SCI-greedy, and SCI local-search placements
 - multiple seeds, top-k values, and network-aware weights
 - RENATER Montpellier peak and off-peak route profiles
-- zero or reference-value network embodied emissions
+- network embodied emissions fixed to zero
+- deterministic edge/cloud hardware-profile distributions
+- operational, embodied, component, network, objective, and total SCI outputs
+
+Set `FIX_TOPOLOGY_DENSITY = False` in `config.py` to evaluate all nine
+topology-density combinations instead of the three fixed scenarios.
 
 ### Analyse Results
 
-Use the notebooks in `results/notebooks/` to clean raw parquet outputs and
-generate plots:
+The notebooks in `results/notebooks/` target the original experiment schema.
+They must be updated before analysing the new Ray Tune output:
 
 ```text
 results/notebooks/clean-raw.ipynb
