@@ -12,9 +12,9 @@ PROLOG_DIR = PROJECT_ROOT / "prolog"
 PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 
 # Execution
-EXPERIMENT_NAME = "network-sci"
+EXPERIMENT_NAME = "network-sci-exhaustive"
 RAY_ADDRESS = "auto"
-TIMEOUT_SECONDS = 900
+TIMEOUT_SECONDS = 1800
 ENCODING = "utf-8"
 RESUME_EXPERIMENT = True
 RESUME_UNFINISHED_TRIALS = True
@@ -30,7 +30,7 @@ APPLICATIONS = [
     for topology in SYNTHETIC_APPLICATION_TOPOLOGIES
     for size in SYNTHETIC_APPLICATION_SIZES
 ] + [{"topology": "online_boutique", "size": 10}]
-INFRASTRUCTURE_SIZES = [16, 32, 64, 128]
+INFRASTRUCTURE_SIZES = [16, 32, 64, 128, 256, 512]
 INFRASTRUCTURE_TOPOLOGIES = [
     "erdos_renyi",
     "barabasi_albert",
@@ -51,10 +51,21 @@ HEURISTICS = [
         f"networkaware({alpha},{beta},{gamma})"
         for alpha, beta, gamma in NETWORK_WEIGHTS
     ),
+    "exhaustive",
     "scigreedy",
     "scilocalsearch",
 ]
 SCOPES = ["components_only", "components_and_network"]
+SCOPE_DEPENDENT_HEURISTICS = {"exhaustive", "scigreedy", "scilocalsearch"}
+PLACEMENT_CONFIGS = [
+    {"heuristic": heuristic, "scope": scope}
+    for heuristic in HEURISTICS
+    for scope in (
+        SCOPES
+        if heuristic in SCOPE_DEPENDENT_HEURISTICS
+        else ["components_and_network"]
+    )
+]
 ROUTE_PROFILES = [
     {
         "name": "renater_montpellier_peak",
@@ -91,8 +102,7 @@ SEARCH_SPACE = {
     "application": tune.grid_search(APPLICATIONS),
     "infrastructure_size": tune.grid_search(INFRASTRUCTURE_SIZES),
     "infrastructure_graph": tune.grid_search(INFRASTRUCTURE_GRAPHS),
-    "heuristic": tune.grid_search(HEURISTICS),
-    "scope": tune.grid_search(SCOPES),
+    "placement": tune.grid_search(PLACEMENT_CONFIGS),
     "route_profile": tune.grid_search(ROUTE_PROFILES),
     "include_network_embodied": INCLUDE_NETWORK_EMBODIED,
 }
@@ -143,7 +153,7 @@ NODE_RESOURCE_PROFILES = [
         "ram": 4.0,
         "bandwidth": 1.0,
         "power_per_cpu": 0.003,
-        "embodied_emissions": 100.0,
+        "embodied_emissions": 125.0,
     },
     {
         "name": "edge_medium",
@@ -152,7 +162,7 @@ NODE_RESOURCE_PROFILES = [
         "ram": 8.0,
         "bandwidth": 2.5,
         "power_per_cpu": 0.004,
-        "embodied_emissions": 160.0,
+        "embodied_emissions": 250.0,
     },
     {
         "name": "edge_large",
@@ -161,7 +171,7 @@ NODE_RESOURCE_PROFILES = [
         "ram": 16.0,
         "bandwidth": 5.0,
         "power_per_cpu": 0.005,
-        "embodied_emissions": 260.0,
+        "embodied_emissions": 500.0,
     },
     {
         "name": "cloud_medium",
@@ -170,7 +180,7 @@ NODE_RESOURCE_PROFILES = [
         "ram": 32.0,
         "bandwidth": 10.0,
         "power_per_cpu": 0.007,
-        "embodied_emissions": 420.0,
+        "embodied_emissions": 1000.0,
     },
     {
         "name": "cloud_large",
@@ -179,10 +189,10 @@ NODE_RESOURCE_PROFILES = [
         "ram": 64.0,
         "bandwidth": 25.0,
         "power_per_cpu": 0.009,
-        "embodied_emissions": 600.0,
+        "embodied_emissions": 2000.0,
     },
 ]
-EXPECTED_LIFETIME_RANGE = (3.0, 7.0)
-PUE_RANGE = (1.05, 1.60)
-CARBON_INTENSITY_RANGE = (0.03, 0.70)
-LINK_DISTANCE_KM_RANGE = (20.0, 1200.0)
+EXPECTED_LIFETIME_RANGE = (2.0, 4.0)
+PUE_RANGE = (1.1, 1.6)
+CARBON_INTENSITY_RANGE = (0.03, 0.9)
+LINK_DISTANCE_KM_RANGE = (5.0, 1000.0)

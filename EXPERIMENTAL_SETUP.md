@@ -107,11 +107,11 @@ same seed and size.
 
 | Profile | Share | vCPU | RAM (GB) | Bandwidth (Gbit/s) | kW per vCPU | Embodied (kgCO2eq) |
 |---|---:|---:|---:|---:|---:|---:|
-| Edge small | 30% | 2 | 4 | 1 | 0.003 | 100 |
-| Edge medium | 30% | 4 | 8 | 2.5 | 0.004 | 160 |
-| Edge large | 20% | 8 | 16 | 5 | 0.005 | 260 |
-| Cloud medium | 15% | 16 | 32 | 10 | 0.007 | 420 |
-| Cloud large | 5% | 32 | 64 | 25 | 0.009 | 600 |
+| Edge small | 30% | 2 | 4 | 1 | 0.003 | 125 |
+| Edge medium | 30% | 4 | 8 | 2.5 | 0.004 | 250 |
+| Edge large | 20% | 8 | 16 | 5 | 0.005 | 500 |
+| Cloud medium | 15% | 16 | 32 | 10 | 0.007 | 1,000 |
+| Cloud large | 5% | 32 | 64 | 25 | 0.009 | 2,000 |
 
 Largest-remainder allocation gives these concrete compositions:
 
@@ -160,26 +160,41 @@ total, and objective SCI are derived from these columns during analysis.
 
 ## Placement heuristics
 
-The grid evaluates twelve configurations:
+The grid evaluates thirteen heuristic configurations, with scope expanded only
+for heuristics whose placement objective depends on it:
 
 - `capacityonly(k)` with `k` equal to 1, 100, and 1,000;
 - `greenonly(k)` with `k` equal to 1, 100, and 1,000;
 - `networkaware(alpha,beta,gamma)` with balanced, green-dominant,
   capacity-dominant, and centrality-dominant weights;
+- `exhaustive`, which enumerates every feasible placement and selects the one
+  with minimum SCI for the selected scope;
 - `scigreedy`;
 - `scilocalsearch`.
 
 Network-aware weights are `(0.33, 0.33, 0.34)`, `(0.60, 0.20, 0.20)`,
-`(0.20, 0.60, 0.20)`, and `(0.20, 0.20, 0.60)`. Every heuristic is evaluated
-with `components_only` and `components_and_network` scopes.
+`(0.20, 0.60, 0.20)`, and `(0.20, 0.20, 0.60)`. `capacityonly`, `greenonly`,
+and `networkaware` ignore `scope`, so Ray runs them once with
+`components_and_network`. `scigreedy`, `scilocalsearch`, and `exhaustive` run
+with both scopes.
+
+`exhaustive` enumerates every feasible placement and selects the lowest-SCI
+placement for its scope. The search stores all candidate placements in memory;
+large applications and infrastructures can exceed the 1,800-second timeout or
+available memory.
+
+The network-aware centrality score uses weighted closeness from the precomputed
+shortest-path distances. For node `n`, `C(n) = (N - 1) / sum(dist(n,m))` over
+all other nodes `m`; the score is `1 - C(n) / max_j C(j)`. Lower scores rank
+better, so nodes with shorter average shortest-path distances are preferred.
 
 ## Grid size
 
-The default fixed topology-density setup contains 20,160 trials:
+The default fixed topology-density setup contains 13,440 trials:
 
-`5 seeds × 7 application scenarios × 4 infrastructure sizes × 3 infrastructure scenarios × 12 heuristics × 2 scopes × 2 route profiles`.
+`5 seeds × 7 application scenarios × 4 infrastructure sizes × 3 infrastructure scenarios × 16 heuristic-scope combinations × 2 route profiles`.
 
-The full topology-density product contains 60,480 trials.
+The full topology-density product contains 40,320 trials.
 
 ## Validation
 
@@ -195,10 +210,12 @@ service, not the number of nodes available. These measurements refer to the
 balanced network-aware heuristic, seed 42, and the 36 combinations of
 application size, infrastructure size, and fixed infrastructure scenario.
 
-All twelve heuristic configurations were also executed successfully with 40
+The twelve non-exhaustive configurations were executed successfully with 40
 services and 128 nodes on the sparse Internet-AS scenario. In that local test,
-most configurations completed within five seconds; `scilocalsearch` required
-approximately 163 seconds. The full Ray Tune grid has not been executed.
+most completed within five seconds; `scilocalsearch` required approximately 163
+seconds. The exhaustive heuristic was smoke-tested on a small application and
+infrastructure only. Its runtime on larger instances is unknown, and the full
+Ray Tune grid has not been executed.
 
 ## Outputs
 
@@ -206,7 +223,7 @@ Each Ray Tune trial generates `application.pl` and `infrastructure.pl` in a
 temporary directory that is deleted after execution. Trial dictionaries are
 merged by Ray Tune and saved to:
 
-`results/parquets/network-sci/raw-sci-aware.parquet`.
+`results/parquets/network-sci-exhaustive/raw-sci-aware.parquet`.
 
 The trial result dictionary contains generated-instance statistics,
 execution status, and the four atomic SCI results. It does not repeat the

@@ -17,6 +17,13 @@ heuristicPlacement(networkaware(Alpha,Beta,Gamma), _, App, P) :-
     servicesByTraffic(App, Services),
     nodesByCombinedScore(Alpha, Beta, Gamma, Nodes),
     once(eligiblePlacement(Services, Nodes, P)).
+heuristicPlacement(exhaustive, Scope, App, BestP) :-
+    application(App, Services, _),
+    findall(N, node(N,_,_,_,_,_), Nodes),
+    findall(SCI-P,
+        (eligiblePlacement(Services, Nodes, P), placementSCI(Scope,App,P,SCI)),
+        Placements),
+    keysort(Placements, [_-BestP|_]).
 heuristicPlacement(scigreedy, Scope, App, P) :-
     greedyPlacement(Scope, App, P).
 heuristicPlacement(scilocalsearch, Scope, App, P) :-

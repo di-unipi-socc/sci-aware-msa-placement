@@ -3,8 +3,10 @@
 :- table capacityValues/4.
 :- table serviceRequirementValues/5.
 :- table serviceTrafficValues/3.
-:- table outgoingNetworkIntensities/2.
-:- table networkIntensities/1.
+:- table nodeCount/1.
+:- table networkCloseness/2.
+:- table networkClosenesses/1.
+:- table maximumNetworkCloseness/1.
 
 operationalFactor(N, Factor) :-
     node(N, _, PowerPerCPU, _, _, PUE),
@@ -75,24 +77,26 @@ incidentService(M, M, _).
 incidentService(M, _, M).
 
 centralityScore(N, Score) :-
-    outgoingNetworkIntensity(N, Intensity),
-    networkIntensities(Intensities),
-    normalizedLowerScore(Intensity, Intensities, Score).
+    networkCloseness(N, Closeness),
+    maximumNetworkCloseness(MaxCloseness),
+    Score is 1 - Closeness / MaxCloseness.
 
-outgoingNetworkIntensity(N, Intensity) :-
-    outgoingNetworkIntensities(N, RouteIntensities),
-    average(RouteIntensities, Intensity).
+networkCloseness(N, Closeness) :-
+    nodeCount(NodeCount),
+    findall(Distance, route(N, _, Distance, _), Distances),
+    sum_list(Distances, TotalDistance),
+    Closeness is (NodeCount - 1) / TotalDistance.
 
-outgoingNetworkIntensities(N, RouteIntensities) :-
-    node(N, _, _, _, _, _),
-    findall(RouteIntensity,
-        (node(Other,_,_,_,_,_),
-         dif(N, Other),
-         networkIntensity(N, Other, OperationalPerGB, EmbodiedPerGB),
-         RouteIntensity is OperationalPerGB + EmbodiedPerGB),
-        RouteIntensities).
+networkClosenesses(Closenesses) :-
+    findall(Closeness, networkCloseness(_, Closeness), Closenesses).
 
-networkIntensities(Intensities) :- findall(Value, outgoingNetworkIntensity(_, Value), Intensities).
+maximumNetworkCloseness(MaxCloseness) :-
+    networkClosenesses(Closenesses),
+    max_list(Closenesses, MaxCloseness).
+
+nodeCount(NodeCount) :-
+    findall(N, node(N,_,_,_,_,_), Nodes),
+    length(Nodes, NodeCount).
 
 nodeScore(Alpha, Beta, Gamma, N, Score) :-
     greenScore(N, GreenScore),
@@ -117,8 +121,3 @@ normalizedHigherScore(_, Min, Max, 0) :- Min =:= Max.
 normalizedHigherScore(Value, Min, Max, Score) :-
     Min =\= Max,
     Score is (Max - Value) / (Max - Min).
-
-average(Values, Average) :-
-    sum_list(Values, Sum),
-    length(Values, Count),
-    Average is Sum / Count.

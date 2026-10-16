@@ -17,8 +17,8 @@ CONFIG_COLUMNS = {
     "config/infrastructure_size": "infrastructure_size",
     "config/infrastructure_graph/topology": "infrastructure_topology",
     "config/infrastructure_graph/density": "infrastructure_density",
-    "config/heuristic": "heuristic",
-    "config/scope": "scope",
+    "config/placement/heuristic": "heuristic",
+    "config/placement/scope": "scope",
     "config/route_profile/name": "route_profile",
     "config/route_profile/operational_per_gb": "network_operational_per_gb",
     "config/route_profile/embodied_per_gb": "network_embodied_per_gb",
@@ -45,8 +45,12 @@ SCI_COLUMNS = [
 
 
 def run_experiment(parameters: dict) -> dict:
+    experiment_parameters = {
+        key: value for key, value in parameters.items() if key != "placement"
+    }
+    experiment_parameters.update(parameters["placement"])
     with TemporaryDirectory(prefix="sci-aware-") as directory:
-        return Experiment(parameters, Path(directory)).run()
+        return Experiment(experiment_parameters, Path(directory)).run()
 
 
 def heuristic_parameters(heuristic: str) -> dict:
