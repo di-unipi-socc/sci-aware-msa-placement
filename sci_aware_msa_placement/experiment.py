@@ -26,12 +26,19 @@ class Experiment:
             "average_route_distance_km": None,
             "maximum_route_distance_km": None,
         }
+        result.update(self._empty_placement_result())
         try:
             application_path, application, application_metadata = build_application(
                 self.parameters, self.work_dir
             )
+            service_requirements = application_metadata.pop(
+                "_service_requirements"
+            )
             infrastructure_path, infrastructure_metadata = build_network(
-                self.parameters, self.work_dir
+                self.parameters,
+                self.work_dir,
+                application,
+                service_requirements,
             )
             result.update(application_metadata)
             result.update(infrastructure_metadata)
@@ -48,27 +55,9 @@ class Experiment:
                 success=False,
                 timeout=True,
                 error=f"Query timed out after {config.TIMEOUT_SECONDS} seconds",
-                time=None,
-                component_operational_sci=None,
-                component_embodied_sci=None,
-                network_operational_sci=None,
-                network_embodied_sci=None,
-                nodes_used=None,
-                placement=None,
             )
         except Exception as error:
-            result.update(
-                success=False,
-                timeout=False,
-                error=str(error),
-                time=None,
-                component_operational_sci=None,
-                component_embodied_sci=None,
-                network_operational_sci=None,
-                network_embodied_sci=None,
-                nodes_used=None,
-                placement=None,
-            )
+            result.update(success=False, timeout=False, error=str(error))
         return result
 
     def _run_prolog(
@@ -90,10 +79,16 @@ class Experiment:
             query = (
                 f"timedPlacement({self.parameters['heuristic']},"
                 f"{self.parameters['scope']},{application},P,_,N,Time),"
+                f"controlledPlacement({application},OptimalP),"
                 f"componentPlacementSCI({application},P,"
                 "ComponentOperationalSCI,ComponentEmbodiedSCI),"
                 f"networkSCI({application},P,NetworkOperationalSCI,"
-                "NetworkEmbodiedSCI)."
+                "NetworkEmbodiedSCI),"
+                f"componentPlacementSCI({application},OptimalP,"
+                "OptimalComponentOperationalSCI,"
+                "OptimalComponentEmbodiedSCI),"
+                f"networkSCI({application},OptimalP,"
+                "OptimalNetworkOperationalSCI,OptimalNetworkEmbodiedSCI)."
             )
             prolog.query_async(query, find_all=False)
             raw_result = prolog.query_async_result()
@@ -104,22 +99,68 @@ class Experiment:
             result = result[0] if result else False
         if not isinstance(result, dict):
             return {
-                "time": None,
-                "component_operational_sci": None,
-                "component_embodied_sci": None,
-                "network_operational_sci": None,
-                "network_embodied_sci": None,
-                "nodes_used": None,
-                "placement": None,
+                **self._empty_placement_result(),
                 "error": "No solution found",
             }
+
+        component_operational = result.get("OptimalComponentOperationalSCI")
+        component_embodied = result.get("OptimalComponentEmbodiedSCI")
+        network_operational = result.get("OptimalNetworkOperationalSCI")
+        network_embodied = result.get("OptimalNetworkEmbodiedSCI")
+        components_only_sci = component_operational + component_embodied
+        components_and_network_sci = sum(
+            (
+                component_operational,
+                component_embodied,
+                network_operational,
+                network_embodied,
+            )
+        )
+        optimal_sci = (
+            components_and_network_sci
+            if self.parameters["scope"] == "components_and_network"
+            else components_only_sci
+        )
         return {
             "time": result.get("Time"),
             "component_operational_sci": result.get("ComponentOperationalSCI"),
             "component_embodied_sci": result.get("ComponentEmbodiedSCI"),
             "network_operational_sci": result.get("NetworkOperationalSCI"),
             "network_embodied_sci": result.get("NetworkEmbodiedSCI"),
+            "optimal_component_operational_sci": component_operational,
+            "optimal_component_embodied_sci": component_embodied,
+            "optimal_network_operational_sci": network_operational,
+            "optimal_network_embodied_sci": network_embodied,
+            "optimal_components_only_sci": components_only_sci,
+            "optimal_components_and_network_sci": components_and_network_sci,
+            "optimal_sci": optimal_sci,
+            "optimal_placement": json.dumps(
+                result.get("OptimalP"), separators=(",", ":")
+            ),
             "nodes_used": result.get("N"),
             "placement": json.dumps(result.get("P"), separators=(",", ":")),
             "error": None,
+        }
+
+    @staticmethod
+    def _empty_placement_result() -> dict[str, Any]:
+        return {
+            "success": False,
+            "timeout": False,
+            "error": None,
+            "time": None,
+            "component_operational_sci": None,
+            "component_embodied_sci": None,
+            "network_operational_sci": None,
+            "network_embodied_sci": None,
+            "optimal_component_operational_sci": None,
+            "optimal_component_embodied_sci": None,
+            "optimal_network_operational_sci": None,
+            "optimal_network_embodied_sci": None,
+            "optimal_components_only_sci": None,
+            "optimal_components_and_network_sci": None,
+            "optimal_sci": None,
+            "optimal_placement": None,
+            "nodes_used": None,
+            "placement": None,
         }

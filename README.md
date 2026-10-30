@@ -64,7 +64,7 @@ Its generated inputs remain available in `debug-dir/`. Change `DEBUG_DIR` in
 Results are saved as:
 
 ```text
-results/parquets/network-sci/raw-sci-aware.parquet
+results/parquets/network-sci-controlled/raw-sci-aware.parquet
 ```
 
 Each Ray Tune trial generates its Prolog inputs in a temporary directory and
@@ -77,17 +77,23 @@ The Ray Tune search space is defined in
 
 - synthetic Erdős–Rényi and Barabási–Albert applications with 10, 20, and 40 services
 - the 10-service Online Boutique topology with randomized requirements and traffic
-- synthetic infrastructures with 16, 32, 64, and 128 nodes
+- synthetic infrastructures with 16, 32, 64, 128, 256, and 512 nodes
 - native NetworkX Erdős–Rényi, Barabási–Albert, and Internet AS graphs
 - sparse, medium, and dense infrastructures with target mean degree 2, 4, and 8
 - fixed topology-density scenarios by default: ER-dense, BA-medium, and AS-sparse
 - component-only and component-plus-network SCI
-- top-k, network-aware, SCI-greedy, and SCI local-search placements
+- controlled known-optimum, top-k, network-aware, SCI-greedy, and SCI local-search placements
 - multiple seeds, top-k values, and network-aware weights
 - RENATER Montpellier peak and off-peak route profiles
 - network embodied emissions fixed to zero
-- deterministic edge/cloud hardware-profile distributions
+- controlled fit, dirty, and broken node profiles; infeasible app/infra-size pairs are excluded
 - component and network operational and embodied SCI outputs
+
+Each scenario has one fit node per service. CPU/RAM requirements prevent
+co-location, fit nodes have lower component SCI, and routes between fit nodes
+are shorter than routes involving dirty or broken nodes. The all-fit placement
+therefore provides a known optimum for both scopes. Its SCI breakdown and
+placement are included in every trial result; `exhaustive` is no longer run.
 
 Set `FIX_TOPOLOGY_DENSITY = False` in `config.py` to evaluate all nine
 topology-density combinations instead of the three fixed scenarios.
@@ -95,6 +101,9 @@ topology-density combinations instead of the three fixed scenarios.
 Existing Ray Tune state is restored by default. Unfinished trials resume and
 errored trials restart according to the `RESUME_*` and
 `RESTART_ERRORED_TRIALS` settings in `config.py`.
+
+The new experiment uses the `network-sci-controlled` output name, so it does
+not restore the previous `network-sci-exhaustive` Ray run.
 
 ### Analyse Results
 

@@ -12,7 +12,7 @@ PROLOG_DIR = PROJECT_ROOT / "prolog"
 PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 
 # Execution
-EXPERIMENT_NAME = "network-sci-exhaustive"
+EXPERIMENT_NAME = "network-sci-controlled"
 RAY_ADDRESS = "auto"
 TIMEOUT_SECONDS = 1800
 ENCODING = "utf-8"
@@ -45,18 +45,18 @@ NETWORK_WEIGHTS = [
     (0.20, 0.20, 0.60),
 ]
 HEURISTICS = [
+    "controlled",
     *(f"capacityonly({k})" for k in TOP_K_VALUES),
     *(f"greenonly({k})" for k in TOP_K_VALUES),
     *(
         f"networkaware({alpha},{beta},{gamma})"
         for alpha, beta, gamma in NETWORK_WEIGHTS
     ),
-    "exhaustive",
     "scigreedy",
     "scilocalsearch",
 ]
 SCOPES = ["components_only", "components_and_network"]
-SCOPE_DEPENDENT_HEURISTICS = {"exhaustive", "scigreedy", "scilocalsearch"}
+SCOPE_DEPENDENT_HEURISTICS = {"controlled", "scigreedy", "scilocalsearch"}
 PLACEMENT_CONFIGS = [
     {"heuristic": heuristic, "scope": scope}
     for heuristic in HEURISTICS
@@ -97,11 +97,22 @@ INFRASTRUCTURE_GRAPHS = (
     else VARIABLE_INFRASTRUCTURE_GRAPHS
 )
 
+SCENARIOS = [
+    {
+        "seed": seed,
+        "application": application,
+        "infrastructure_size": infrastructure_size,
+        "infrastructure_graph": infrastructure_graph,
+    }
+    for seed in SEEDS
+    for application in APPLICATIONS
+    for infrastructure_size in INFRASTRUCTURE_SIZES
+    for infrastructure_graph in INFRASTRUCTURE_GRAPHS
+    if infrastructure_size >= application["size"] + 2
+]
+
 SEARCH_SPACE = {
-    "seed": tune.grid_search(SEEDS),
-    "application": tune.grid_search(APPLICATIONS),
-    "infrastructure_size": tune.grid_search(INFRASTRUCTURE_SIZES),
-    "infrastructure_graph": tune.grid_search(INFRASTRUCTURE_GRAPHS),
+    "scenario": tune.grid_search(SCENARIOS),
     "placement": tune.grid_search(PLACEMENT_CONFIGS),
     "route_profile": tune.grid_search(ROUTE_PROFILES),
     "include_network_embodied": INCLUDE_NETWORK_EMBODIED,
@@ -144,55 +155,22 @@ TIME_IN_RESERVE_RANGE = (0.10, 1.00)
 INTERACTION_GB_RANGE = (0.00005, 0.005)
 FUNCTIONAL_UNITS = 25_000_000
 
-# Synthetic infrastructure
-NODE_RESOURCE_PROFILES = [
-    {
-        "name": "edge_small",
-        "percentage": 30,
-        "cpu": 2,
-        "ram": 4.0,
-        "bandwidth": 1.0,
-        "power_per_cpu": 0.003,
-        "embodied_emissions": 125.0,
-    },
-    {
-        "name": "edge_medium",
-        "percentage": 30,
-        "cpu": 4,
-        "ram": 8.0,
-        "bandwidth": 2.5,
-        "power_per_cpu": 0.004,
-        "embodied_emissions": 250.0,
-    },
-    {
-        "name": "edge_large",
-        "percentage": 20,
-        "cpu": 8,
-        "ram": 16.0,
-        "bandwidth": 5.0,
-        "power_per_cpu": 0.005,
-        "embodied_emissions": 500.0,
-    },
-    {
-        "name": "cloud_medium",
-        "percentage": 15,
-        "cpu": 16,
-        "ram": 32.0,
-        "bandwidth": 10.0,
-        "power_per_cpu": 0.007,
-        "embodied_emissions": 1000.0,
-    },
-    {
-        "name": "cloud_large",
-        "percentage": 5,
-        "cpu": 32,
-        "ram": 64.0,
-        "bandwidth": 25.0,
-        "power_per_cpu": 0.009,
-        "embodied_emissions": 2000.0,
-    },
-]
-EXPECTED_LIFETIME_RANGE = (2.0, 4.0)
-PUE_RANGE = (1.1, 1.6)
-CARBON_INTENSITY_RANGE = (0.03, 0.9)
-LINK_DISTANCE_KM_RANGE = (5.0, 1000.0)
+# Controlled scenarios: fit nodes are service-specific; dirty nodes are feasible
+# alternatives; broken nodes have no capacity. Fit CPU/RAM vectors are
+# pairwise incomparable, preventing service co-location.
+CONTROLLED_FIT_PROFILE = {
+    "power_per_cpu": 0.003,
+    "expected_lifetime": 4.0,
+    "embodied_emissions_per_cpu": 62.5,
+    "pue": 1.1,
+    "carbon_intensity": 0.10,
+}
+CONTROLLED_DIRTY_PROFILE = {
+    "power_per_cpu": 0.009,
+    "expected_lifetime": 2.0,
+    "embodied_emissions_per_cpu": 62.5,
+    "pue": 1.6,
+    "carbon_intensity": 0.90,
+}
+CONTROLLED_SHORT_LINK_KM = 1.0
+CONTROLLED_LONG_LINK_KM = 1000.0

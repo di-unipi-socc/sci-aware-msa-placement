@@ -58,12 +58,22 @@ def build_application(
         f"application({application},[{','.join(services)}],[{','.join(endpoints)}]).",
         "",
     ]
-    for service in services:
-        cpu = requirements_rng.uniform(*config.CPU_REQUIREMENT_RANGE)
-        ram = requirements_rng.uniform(*config.RAM_REQUIREMENT_RANGE)
+    cpu_requirements, ram_requirements = _incomparable_requirements(
+        requirements_rng, len(services)
+    )
+    service_requirements = {}
+    for service, cpu, ram in zip(
+        services, cpu_requirements, ram_requirements, strict=True
+    ):
         bandwidth_in = requirements_rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
         bandwidth_out = requirements_rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
         time_in_reserve = requirements_rng.uniform(*config.TIME_IN_RESERVE_RANGE)
+        service_requirements[service] = (
+            cpu,
+            ram,
+            bandwidth_in,
+            bandwidth_out,
+        )
         lines.append(
             f"microservice({service},rr({_number(cpu)},{_number(ram)},"
             f"{_number(bandwidth_in)},{_number(bandwidth_out)}),"
@@ -94,6 +104,7 @@ def build_application(
     path.write_text("\n".join(lines) + "\n", encoding=config.ENCODING)
     all_volumes = [volume for volumes in interaction_volumes for volume in volumes]
     metadata = {
+        "_service_requirements": service_requirements,
         "application_edges": sum(len(pairs) for pairs in interaction_pairs),
         "actual_endpoint_count": len(endpoints),
         "average_interaction_gb": sum(all_volumes) / len(all_volumes),
@@ -147,12 +158,26 @@ def _atoms(raw_atoms: str) -> list[str]:
     return [atom.strip() for atom in raw_atoms.split(",")]
 
 
-def build_network(parameters: dict, output_dir: Path) -> tuple[Path, dict]:
+def _incomparable_requirements(
+    rng: random.Random, count: int
+) -> tuple[list[float], list[float]]:
+    cpu_samples = set()
+    ram_samples = set()
+    while len(cpu_samples) < count:
+        cpu_samples.add(rng.uniform(*config.CPU_REQUIREMENT_RANGE))
+    while len(ram_samples) < count:
+        ram_samples.add(rng.uniform(*config.RAM_REQUIREMENT_RANGE))
+    return sorted(cpu_samples), sorted(ram_samples, reverse=True)
+
+
+def build_network(
+    parameters: dict,
+    output_dir: Path,
+    application: str,
+    service_requirements: dict[str, tuple[float, float, float, float]],
+) -> tuple[Path, dict]:
     seed = parameters["seed"]
-    profile_rng = random.Random(seed + 3_000_000)
     graph_rng = random.Random(seed + 4_000_000)
-    distance_rng = random.Random(seed + 5_000_000)
-    site_rng = random.Random(seed + 6_000_000)
     size = parameters["infrastructure_size"]
     graph = parameters["infrastructure_graph"]
     topology = graph["topology"]
@@ -166,27 +191,51 @@ def build_network(parameters: dict, output_dir: Path) -> tuple[Path, dict]:
         else 0.0
     )
     nodes = [f"node_{index}" for index in range(size)]
-    profiles = _node_profiles(size, profile_rng)
+    services = list(service_requirements)
+    fit_node_count = len(services)
+    if size < fit_node_count + 2:
+        raise ValueError("Controlled infrastructure needs fit, dirty, and broken nodes")
+    extra_node_count = size - fit_node_count
+    dirty_node_count = (extra_node_count + 1) // 2
+    long_link_km = max(
+        config.CONTROLLED_LONG_LINK_KM,
+        config.CONTROLLED_SHORT_LINK_KM * fit_node_count + 1,
+    )
     network = _build_graph(size, topology, graph_rng, average_degree)
+    network.add_edges_from((index, index + 1) for index in range(fit_node_count - 1))
     for source, target in network.edges:
-        network[source][target]["distance"] = distance_rng.uniform(
-            *config.LINK_DISTANCE_KM_RANGE
+        network[source][target]["distance"] = (
+            config.CONTROLLED_SHORT_LINK_KM
+            if source < fit_node_count and target < fit_node_count
+            else long_link_km
         )
 
     node_lines = []
     carbon_intensity_lines = []
-    for node, node_profile in zip(nodes, profiles, strict=True):
-        cpu = node_profile["cpu"]
-        ram = node_profile["ram"]
-        bandwidth_in = node_profile["bandwidth"]
-        bandwidth_out = node_profile["bandwidth"]
-        power = node_profile["power_per_cpu"]
-        lifetime = site_rng.uniform(*config.EXPECTED_LIFETIME_RANGE)
-        embodied = node_profile["embodied_emissions"]
-        pue = site_rng.uniform(*config.PUE_RANGE)
-        carbon_intensity = site_rng.uniform(*config.CARBON_INTENSITY_RANGE)
+    fit_nodes = []
+    for index, node in enumerate(nodes):
+        if index < fit_node_count:
+            service = services[index]
+            cpu, ram, bandwidth_in, bandwidth_out = service_requirements[service]
+            profile = config.CONTROLLED_FIT_PROFILE
+            fit_nodes.append((service, node))
+        elif index < fit_node_count + dirty_node_count:
+            service_index = (index - fit_node_count) % fit_node_count
+            cpu, ram, bandwidth_in, bandwidth_out = service_requirements[
+                services[service_index]
+            ]
+            profile = config.CONTROLLED_DIRTY_PROFILE
+        else:
+            cpu = ram = bandwidth_in = bandwidth_out = 0
+            profile = config.CONTROLLED_DIRTY_PROFILE
+
+        power = profile["power_per_cpu"]
+        lifetime = profile["expected_lifetime"]
+        embodied = profile["embodied_emissions_per_cpu"] * cpu
+        pue = profile["pue"]
+        carbon_intensity = profile["carbon_intensity"]
         node_lines.append(
-            f"node({node},tor({cpu},{_number(ram)},{_number(bandwidth_in)},"
+            f"node({node},tor({_number(cpu)},{_number(ram)},{_number(bandwidth_in)},"
             f"{_number(bandwidth_out)}),{_number(power)},{_number(lifetime)},"
             f"{_number(embodied)},{_number(pue)})."
         )
@@ -198,6 +247,11 @@ def build_network(parameters: dict, output_dir: Path) -> tuple[Path, dict]:
         *node_lines,
         "",
         *carbon_intensity_lines,
+        "",
+        *(
+            f"fitNode({application},{service},{node})."
+            for service, node in fit_nodes
+        ),
     ]
     lines.extend(
         [
@@ -241,36 +295,6 @@ def build_network(parameters: dict, output_dir: Path) -> tuple[Path, dict]:
         "maximum_route_distance_km": max(route_distances),
     }
     return path, metadata
-
-
-def _node_profiles(size: int, rng: random.Random) -> list[dict]:
-    profiles = config.NODE_RESOURCE_PROFILES
-    counts = node_profile_counts(size)
-    assignments = [
-        profile
-        for profile in profiles
-        for _ in range(counts[profile["name"]])
-    ]
-    rng.shuffle(assignments)
-    return assignments
-
-
-def node_profile_counts(size: int) -> dict[str, int]:
-    profiles = config.NODE_RESOURCE_PROFILES
-    weighted_counts = [size * profile["percentage"] for profile in profiles]
-    counts = [count // 100 for count in weighted_counts]
-    remaining = size - sum(counts)
-    remainders = sorted(
-        range(len(profiles)),
-        key=lambda index: weighted_counts[index] % 100,
-        reverse=True,
-    )
-    for index in remainders[:remaining]:
-        counts[index] += 1
-    return {
-        profile["name"]: count
-        for profile, count in zip(profiles, counts, strict=True)
-    }
 
 
 def _build_graph(

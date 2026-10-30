@@ -11,12 +11,12 @@ from sci_aware_msa_placement.experiment import Experiment
 
 
 CONFIG_COLUMNS = {
-    "config/seed": "seed",
-    "config/application/size": "application_size",
-    "config/application/topology": "application_topology",
-    "config/infrastructure_size": "infrastructure_size",
-    "config/infrastructure_graph/topology": "infrastructure_topology",
-    "config/infrastructure_graph/density": "infrastructure_density",
+    "config/scenario/seed": "seed",
+    "config/scenario/application/size": "application_size",
+    "config/scenario/application/topology": "application_topology",
+    "config/scenario/infrastructure_size": "infrastructure_size",
+    "config/scenario/infrastructure_graph/topology": "infrastructure_topology",
+    "config/scenario/infrastructure_graph/density": "infrastructure_density",
     "config/placement/heuristic": "heuristic",
     "config/placement/scope": "scope",
     "config/route_profile/name": "route_profile",
@@ -42,13 +42,28 @@ SCI_COLUMNS = [
     "network_operational_sci",
     "network_embodied_sci",
 ]
+OPTIMAL_SCI_COLUMNS = [
+    "optimal_component_operational_sci",
+    "optimal_component_embodied_sci",
+    "optimal_network_operational_sci",
+    "optimal_network_embodied_sci",
+    "optimal_components_only_sci",
+    "optimal_components_and_network_sci",
+    "optimal_sci",
+    "optimal_placement",
+]
 
 
 def run_experiment(parameters: dict) -> dict:
     experiment_parameters = {
-        key: value for key, value in parameters.items() if key != "placement"
+        **parameters["scenario"],
+        **parameters["placement"],
+        **{
+            key: value
+            for key, value in parameters.items()
+            if key not in {"scenario", "placement"}
+        },
     }
-    experiment_parameters.update(parameters["placement"])
     with TemporaryDirectory(prefix="sci-aware-") as directory:
         return Experiment(experiment_parameters, Path(directory)).run()
 
@@ -84,7 +99,14 @@ def prepare_results(dataframe: pd.DataFrame) -> pd.DataFrame:
         configuration["heuristic"].map(heuristic_parameters).tolist(),
         index=dataframe.index,
     )
-    results = dataframe[[*STATISTIC_COLUMNS, *EXECUTION_COLUMNS, *SCI_COLUMNS]]
+    results = dataframe[
+        [
+            *STATISTIC_COLUMNS,
+            *EXECUTION_COLUMNS,
+            *SCI_COLUMNS,
+            *OPTIMAL_SCI_COLUMNS,
+        ]
+    ]
     return pd.concat([configuration, heuristic_data, results], axis=1)
 
 

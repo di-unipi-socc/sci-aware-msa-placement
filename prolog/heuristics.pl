@@ -13,23 +13,24 @@ heuristicPlacement(greenonly(K), _, App, P) :-
     servicesByRequirement(App, Services),
     nodesByGreenness(Nodes),
     bestOfFirstKPlacements(K, App, Services, Nodes, P).
+heuristicPlacement(controlled, _, App, P) :-
+    controlledPlacement(App, P).
 heuristicPlacement(networkaware(Alpha,Beta,Gamma), _, App, P) :-
     servicesByTraffic(App, Services),
     nodesByCombinedScore(Alpha, Beta, Gamma, Nodes),
     once(eligiblePlacement(Services, Nodes, P)).
-heuristicPlacement(exhaustive, Scope, App, BestP) :-
-    application(App, Services, _),
-    findall(N, node(N,_,_,_,_,_), Nodes),
-    findall(SCI-P,
-        (eligiblePlacement(Services, Nodes, P), placementSCI(Scope,App,P,SCI)),
-        Placements),
-    keysort(Placements, [_-BestP|_]).
 heuristicPlacement(scigreedy, Scope, App, P) :-
     greedyPlacement(Scope, App, P).
 heuristicPlacement(scilocalsearch, Scope, App, P) :-
     greedyPlacement(Scope, App, InitialP),
     placementSCI(Scope, App, InitialP, InitialSCI),
     improvePlacement(Scope, App, InitialP, InitialSCI, P, _).
+
+controlledPlacement(App, P) :-
+    application(App, Services, _),
+    findall(on(Service,Node),
+        (member(Service,Services), fitNode(App,Service,Node)),
+        P).
 
 servicesByRequirement(App, Services) :-
     application(App, Microservices, _),
