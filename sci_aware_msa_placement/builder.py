@@ -190,6 +190,8 @@ def build_network(
         if parameters["include_network_embodied"]
         else 0.0
     )
+    profile_rng = random.Random(seed + 5_000_000)
+    link_rng = random.Random(seed + 6_000_000)
     nodes = [f"node_{index}" for index in range(size)]
     services = list(service_requirements)
     fit_node_count = len(services)
@@ -197,17 +199,26 @@ def build_network(
         raise ValueError("Controlled infrastructure needs fit, dirty, and broken nodes")
     extra_node_count = size - fit_node_count
     dirty_node_count = (extra_node_count + 1) // 2
-    long_link_km = max(
-        config.CONTROLLED_LONG_LINK_KM,
-        config.CONTROLLED_SHORT_LINK_KM * fit_node_count + 1,
+    long_link_min_km = max(
+        config.CONTROLLED_LONG_LINK_KM_RANGE[0],
+        config.CONTROLLED_SHORT_LINK_KM_RANGE[1] * fit_node_count + 1,
     )
+    long_link_max_km = max(
+        config.CONTROLLED_LONG_LINK_KM_RANGE[1], long_link_min_km + 1
+    )
+    broken_count = size - fit_node_count - dirty_node_count
+    broken_profiles = [config.CONTROLLED_FIT_PROFILE] * ((broken_count + 1) // 2)
+    broken_profiles.extend(
+        [config.CONTROLLED_DIRTY_PROFILE] * (broken_count // 2)
+    )
+    profile_rng.shuffle(broken_profiles)
     network = _build_graph(size, topology, graph_rng, average_degree)
     network.add_edges_from((index, index + 1) for index in range(fit_node_count - 1))
     for source, target in network.edges:
         network[source][target]["distance"] = (
-            config.CONTROLLED_SHORT_LINK_KM
+            link_rng.uniform(*config.CONTROLLED_SHORT_LINK_KM_RANGE)
             if source < fit_node_count and target < fit_node_count
-            else long_link_km
+            else link_rng.uniform(long_link_min_km, long_link_max_km)
         )
 
     node_lines = []
@@ -227,13 +238,15 @@ def build_network(
             profile = config.CONTROLLED_DIRTY_PROFILE
         else:
             cpu = ram = bandwidth_in = bandwidth_out = 0
-            profile = config.CONTROLLED_DIRTY_PROFILE
+            profile = broken_profiles[index - fit_node_count - dirty_node_count]
 
-        power = profile["power_per_cpu"]
-        lifetime = profile["expected_lifetime"]
-        embodied = profile["embodied_emissions_per_cpu"] * cpu
-        pue = profile["pue"]
-        carbon_intensity = profile["carbon_intensity"]
+        power = profile_rng.uniform(*profile["power_per_cpu"])
+        lifetime = profile_rng.uniform(*profile["expected_lifetime"])
+        embodied = profile_rng.uniform(
+            *profile["embodied_emissions_per_cpu"]
+        ) * cpu
+        pue = profile_rng.uniform(*profile["pue"])
+        carbon_intensity = profile_rng.uniform(*profile["carbon_intensity"])
         node_lines.append(
             f"node({node},tor({_number(cpu)},{_number(ram)},{_number(bandwidth_in)},"
             f"{_number(bandwidth_out)}),{_number(power)},{_number(lifetime)},"

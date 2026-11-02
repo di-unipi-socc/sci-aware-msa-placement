@@ -28,22 +28,28 @@ vectors prevent two services from sharing any generated node.
 Each service has a dedicated **fit** node whose capacities equal that service's
 requirements. Extra nodes are split between **dirty** alternatives, whose
 capacities match selected service requirements, and **broken** nodes with zero
-capacity. Fit and dirty nodes use fixed component profiles:
+capacity. Each fit and dirty node samples its component parameters uniformly
+from separate, non-overlapping ranges:
 
 | Profile | kW/vCPU | Lifetime (years) | Embodied kgCO2eq/vCPU | PUE | Carbon intensity |
 |---|---:|---:|---:|---:|---:|
-| Fit | 0.003 | 4 | 62.5 | 1.1 | 0.10 |
-| Dirty | 0.009 | 2 | 62.5 | 1.6 | 0.90 |
+| Fit | 0.0025–0.0045 | 4–6 | 50–62.5 | 1.05–1.25 | 0.03–0.20 |
+| Dirty | 0.006–0.009 | 2–3 | 62.6–80 | 1.30–1.60 | 0.40–0.90 |
 
-The embodied value scales the existing cloud-large reference of 2,000 kgCO2eq
-over 32 vCPU. Fit and dirty use the low/high ends of the configured power range;
-their lifetimes, PUE, and carbon intensity keep both component SCI terms lower
-on fit nodes.
+Broken nodes receive a shuffled, as-even-as-possible mix of fit-like and
+dirty-like energy profiles while retaining zero capacity. The embodied ranges
+bracket the cloud-large reference of 2,000 kgCO2eq over 32 vCPU. Even at the
+range limits, fit nodes have lower operational factors (at most 0.001125 versus
+at least 0.00312) and embodied factors per vCPU-year (at most 15.625 versus at
+least 20.87). Thus every eligible fit placement remains better on component SCI.
+All profile and link draws use deterministic random streams derived from the
+scenario seed, so placements are compared on the same generated infrastructure.
 
 The generated physical topology still follows the selected NetworkX graph and
-density. Fit nodes are connected by short links of 1 km; all links involving a
-dirty or broken node are 1,000 km. This makes every fit-to-fit shortest route
-shorter than any route involving an alternative node.
+density. Fit-fit links sample 1–5 km; links involving a dirty or broken node
+sample 700–1,000 km. The lower bound for long links is raised when needed to
+remain above the longest possible fit-chain route. This keeps every fit-to-fit
+shortest route shorter than any route involving an alternative node.
 
 The fit placement is optimal for both objectives: fit nodes have lower
 component operational and embodied SCI than dirty nodes, and fit-to-fit routes

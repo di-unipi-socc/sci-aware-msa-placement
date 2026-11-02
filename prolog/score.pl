@@ -88,7 +88,9 @@ networkCloseness(N, Closeness) :-
     Closeness is (NodeCount - 1) / TotalDistance.
 
 networkClosenesses(Closenesses) :-
-    findall(Closeness, networkCloseness(_, Closeness), Closenesses).
+    findall(Closeness,
+        (node(N,_,_,_,_,_), networkCloseness(N,Closeness)),
+        Closenesses).
 
 maximumNetworkCloseness(MaxCloseness) :-
     networkClosenesses(Closenesses),

@@ -12,7 +12,7 @@ PROLOG_DIR = PROJECT_ROOT / "prolog"
 PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 
 # Execution
-EXPERIMENT_NAME = "network-sci-controlled"
+EXPERIMENT_NAME = "network-sci-controlled-varied"
 RAY_ADDRESS = "auto"
 TIMEOUT_SECONDS = 1800
 ENCODING = "utf-8"
@@ -159,18 +159,18 @@ FUNCTIONAL_UNITS = 25_000_000
 # alternatives; broken nodes have no capacity. Fit CPU/RAM vectors are
 # pairwise incomparable, preventing service co-location.
 CONTROLLED_FIT_PROFILE = {
-    "power_per_cpu": 0.003,
-    "expected_lifetime": 4.0,
-    "embodied_emissions_per_cpu": 62.5,
-    "pue": 1.1,
-    "carbon_intensity": 0.10,
+    "power_per_cpu": (0.0025, 0.0045),
+    "expected_lifetime": (4.0, 6.0),
+    "embodied_emissions_per_cpu": (50.0, 62.5),
+    "pue": (1.05, 1.25),
+    "carbon_intensity": (0.03, 0.20),
 }
 CONTROLLED_DIRTY_PROFILE = {
-    "power_per_cpu": 0.009,
-    "expected_lifetime": 2.0,
-    "embodied_emissions_per_cpu": 62.5,
-    "pue": 1.6,
-    "carbon_intensity": 0.90,
+    "power_per_cpu": (0.006, 0.009),
+    "expected_lifetime": (2.0, 3.0),
+    "embodied_emissions_per_cpu": (62.6, 80.0),
+    "pue": (1.30, 1.60),
+    "carbon_intensity": (0.40, 0.90),
 }
-CONTROLLED_SHORT_LINK_KM = 1.0
-CONTROLLED_LONG_LINK_KM = 1000.0
+CONTROLLED_SHORT_LINK_KM_RANGE = (1.0, 5.0)
+CONTROLLED_LONG_LINK_KM_RANGE = (700.0, 1000.0)

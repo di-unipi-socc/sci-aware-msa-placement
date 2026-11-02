@@ -90,10 +90,12 @@ The Ray Tune search space is defined in
 - component and network operational and embodied SCI outputs
 
 Each scenario has one fit node per service. CPU/RAM requirements prevent
-co-location, fit nodes have lower component SCI, and routes between fit nodes
-are shorter than routes involving dirty or broken nodes. The all-fit placement
-therefore provides a known optimum for both scopes. Its SCI breakdown and
-placement are included in every trial result; `exhaustive` is no longer run.
+co-location; sampled fit and dirty profiles retain strict component-SCI
+separation, and sampled fit-fit routes remain shorter than routes involving
+dirty or broken nodes. The all-fit placement therefore provides a known optimum
+for both scopes. Its SCI breakdown and placement are included in every trial
+result; `exhaustive` is no longer run. Broken nodes receive either a fit-like
+or dirty-like energy profile but have zero capacity.
 
 Set `FIX_TOPOLOGY_DENSITY = False` in `config.py` to evaluate all nine
 topology-density combinations instead of the three fixed scenarios.
