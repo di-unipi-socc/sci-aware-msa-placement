@@ -12,7 +12,7 @@ PROLOG_DIR = PROJECT_ROOT / "prolog"
 PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 
 # Execution
-EXPERIMENT_NAME = "network-sci-controlled-varied"
+EXPERIMENT_NAME = "network-sci-controlled-varied-r2"
 RAY_ADDRESS = "auto"
 TIMEOUT_SECONDS = 1800
 ENCODING = "utf-8"
