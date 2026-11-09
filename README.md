@@ -64,7 +64,7 @@ Its generated inputs remain available in `debug-dir/`. Change `DEBUG_DIR` in
 Results are saved as:
 
 ```text
-results/parquets/network-sci-controlled/raw-sci-aware.parquet
+results/parquets/network-sci-random-v1/raw-sci-aware.parquet
 ```
 
 Each Ray Tune trial generates its Prolog inputs in a temporary directory and
@@ -86,10 +86,17 @@ The Ray Tune search space is defined in
 - multiple seeds, top-k values, and network-aware weights
 - RENATER Montpellier peak and off-peak route profiles
 - network embodied emissions fixed to zero
-- controlled fit, dirty, and broken node profiles; infeasible app/infra-size pairs are excluded
+- random resource profiles or controlled fit, dirty, and broken nodes
 - component and network operational and embodied SCI outputs
 
-Each scenario has one fit node per service. CPU/RAM requirements prevent
+Set `SCENARIO_MODE = "random"` (default) to restore the pre-controlled generator:
+independent application requirements, five resource profiles and random link
+distances. The run name is `network-sci-random-v1`; optimal-reference fields are
+null. Random mode includes all app/infra-size pairs and excludes `controlled`.
+See `EXPERIMENTAL_SETUP.md` for the restored ranges and profile percentages.
+
+Set `SCENARIO_MODE = "controlled"` for the known-optimum benchmark.
+Each controlled scenario has one fit node per service. CPU/RAM requirements prevent
 co-location; sampled fit and dirty profiles retain strict component-SCI
 separation, and sampled fit-fit routes remain shorter than routes involving
 dirty or broken nodes. The all-fit placement therefore provides a known optimum
@@ -104,8 +111,8 @@ Existing Ray Tune state is restored by default. Unfinished trials resume and
 errored trials restart according to the `RESUME_*` and
 `RESTART_ERRORED_TRIALS` settings in `config.py`.
 
-The new experiment uses the `network-sci-controlled` output name, so it does
-not restore the previous `network-sci-exhaustive` Ray run.
+Experiment names include the scenario mode (`network-sci-random-v1` or
+`network-sci-controlled-v1`) so the two modes have separate Ray state and outputs.
 
 ### Analyse Results
 

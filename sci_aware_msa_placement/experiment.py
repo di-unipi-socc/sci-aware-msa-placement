@@ -79,17 +79,20 @@ class Experiment:
             query = (
                 f"timedPlacement({self.parameters['heuristic']},"
                 f"{self.parameters['scope']},{application},P,_,N,Time),"
-                f"controlledPlacement({application},OptimalP),"
                 f"componentPlacementSCI({application},P,"
                 "ComponentOperationalSCI,ComponentEmbodiedSCI),"
                 f"networkSCI({application},P,NetworkOperationalSCI,"
-                "NetworkEmbodiedSCI),"
-                f"componentPlacementSCI({application},OptimalP,"
-                "OptimalComponentOperationalSCI,"
-                "OptimalComponentEmbodiedSCI),"
-                f"networkSCI({application},OptimalP,"
-                "OptimalNetworkOperationalSCI,OptimalNetworkEmbodiedSCI)."
+                "NetworkEmbodiedSCI)."
             )
+            if self.parameters.get("scenario_mode", config.SCENARIO_MODE) == "controlled":
+                query = query[:-1] + (
+                    f",controlledPlacement({application},OptimalP),"
+                    f"componentPlacementSCI({application},OptimalP,"
+                    "OptimalComponentOperationalSCI,"
+                    "OptimalComponentEmbodiedSCI),"
+                    f"networkSCI({application},OptimalP,"
+                    "OptimalNetworkOperationalSCI,OptimalNetworkEmbodiedSCI)."
+                )
             prolog.query_async(query, find_all=False)
             raw_result = prolog.query_async_result()
         return self._normalize_result(parse_prolog(raw_result))
@@ -107,15 +110,14 @@ class Experiment:
         component_embodied = result.get("OptimalComponentEmbodiedSCI")
         network_operational = result.get("OptimalNetworkOperationalSCI")
         network_embodied = result.get("OptimalNetworkEmbodiedSCI")
-        components_only_sci = component_operational + component_embodied
-        components_and_network_sci = sum(
-            (
-                component_operational,
-                component_embodied,
-                network_operational,
-                network_embodied,
+        components_only_sci = None
+        components_and_network_sci = None
+        if component_operational is not None:
+            components_only_sci = component_operational + component_embodied
+            components_and_network_sci = sum(
+                (component_operational, component_embodied,
+                 network_operational, network_embodied)
             )
-        )
         optimal_sci = (
             components_and_network_sci
             if self.parameters["scope"] == "components_and_network"
@@ -134,8 +136,9 @@ class Experiment:
             "optimal_components_only_sci": components_only_sci,
             "optimal_components_and_network_sci": components_and_network_sci,
             "optimal_sci": optimal_sci,
-            "optimal_placement": json.dumps(
-                result.get("OptimalP"), separators=(",", ":")
+            "optimal_placement": (
+                json.dumps(result["OptimalP"], separators=(",", ":"))
+                if "OptimalP" in result else None
             ),
             "nodes_used": result.get("N"),
             "placement": json.dumps(result.get("P"), separators=(",", ":")),

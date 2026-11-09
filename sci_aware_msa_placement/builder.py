@@ -58,13 +58,18 @@ def build_application(
         f"application({application},[{','.join(services)}],[{','.join(endpoints)}]).",
         "",
     ]
-    cpu_requirements, ram_requirements = _incomparable_requirements(
-        requirements_rng, len(services)
-    )
+    mode = parameters.get("scenario_mode", config.SCENARIO_MODE)
+    if mode == "controlled":
+        cpu_requirements, ram_requirements = _incomparable_requirements(
+            requirements_rng, len(services)
+        )
     service_requirements = {}
-    for service, cpu, ram in zip(
-        services, cpu_requirements, ram_requirements, strict=True
-    ):
+    for index, service in enumerate(services):
+        if mode == "controlled":
+            cpu, ram = cpu_requirements[index], ram_requirements[index]
+        else:
+            cpu = requirements_rng.uniform(*config.CPU_REQUIREMENT_RANGE)
+            ram = requirements_rng.uniform(*config.RAM_REQUIREMENT_RANGE)
         bandwidth_in = requirements_rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
         bandwidth_out = requirements_rng.uniform(*config.BANDWIDTH_REQUIREMENT_RANGE)
         time_in_reserve = requirements_rng.uniform(*config.TIME_IN_RESERVE_RANGE)
@@ -171,6 +176,148 @@ def _incomparable_requirements(
 
 
 def build_network(
+    parameters: dict,
+    output_dir: Path,
+    application: str,
+    service_requirements: dict[str, tuple[float, float, float, float]],
+) -> tuple[Path, dict]:
+    mode = parameters.get("scenario_mode", config.SCENARIO_MODE)
+    if mode == "random":
+        return _build_random_network(parameters, output_dir)
+    if mode == "controlled":
+        return _build_controlled_network(
+            parameters, output_dir, application, service_requirements
+        )
+    raise ValueError(f"Unknown scenario mode: {mode}")
+
+
+def _build_random_network(parameters: dict, output_dir: Path) -> tuple[Path, dict]:
+    seed = parameters["seed"]
+    profile_rng = random.Random(seed + 3_000_000)
+    graph_rng = random.Random(seed + 4_000_000)
+    distance_rng = random.Random(seed + 5_000_000)
+    site_rng = random.Random(seed + 6_000_000)
+    size = parameters["infrastructure_size"]
+    graph = parameters["infrastructure_graph"]
+    topology = graph["topology"]
+    average_degree = config.AVERAGE_DEGREE_BY_DENSITY[
+        graph["density"]
+    ]
+    route_profile = parameters["route_profile"]
+    embodied_per_gb = (
+        route_profile["embodied_per_gb"]
+        if parameters["include_network_embodied"]
+        else 0.0
+    )
+    nodes = [f"node_{index}" for index in range(size)]
+    profiles = _node_profiles(size, profile_rng)
+    network = _build_graph(size, topology, graph_rng, average_degree)
+    for source, target in network.edges:
+        network[source][target]["distance"] = distance_rng.uniform(
+            *config.LINK_DISTANCE_KM_RANGE
+        )
+
+    node_lines = []
+    carbon_intensity_lines = []
+    for node, node_profile in zip(nodes, profiles, strict=True):
+        cpu = node_profile["cpu"]
+        ram = node_profile["ram"]
+        bandwidth_in = node_profile["bandwidth"]
+        bandwidth_out = node_profile["bandwidth"]
+        power = node_profile["power_per_cpu"]
+        lifetime = site_rng.uniform(*config.EXPECTED_LIFETIME_RANGE)
+        embodied = node_profile["embodied_emissions"]
+        pue = site_rng.uniform(*config.PUE_RANGE)
+        carbon_intensity = site_rng.uniform(*config.CARBON_INTENSITY_RANGE)
+        node_lines.append(
+            f"node({node},tor({cpu},{_number(ram)},{_number(bandwidth_in)},"
+            f"{_number(bandwidth_out)}),{_number(power)},{_number(lifetime)},"
+            f"{_number(embodied)},{_number(pue)})."
+        )
+        carbon_intensity_lines.append(
+            f"carbon_intensity({node},{_number(carbon_intensity)})."
+        )
+
+    lines = [
+        *node_lines,
+        "",
+        *carbon_intensity_lines,
+    ]
+    lines.extend(
+        [
+            "",
+            f"routeProfile({route_profile['name']},"
+            f"{route_profile['operational_per_gb']},"
+            f"{embodied_per_gb}).",
+            "",
+        ]
+    )
+    distances = dict(
+        nx.all_pairs_dijkstra_path_length(network, weight="distance")
+    )
+    for source in range(size):
+        for target in range(size):
+            if source != target:
+                lines.append(
+                    f"route({nodes[source]},{nodes[target]},"
+                    f"{_number(distances[source][target])},"
+                    f"{route_profile['name']})."
+                )
+
+    path = output_dir / "infrastructure.pl"
+    path.write_text("\n".join(lines) + "\n", encoding=config.ENCODING)
+    route_distances = [
+        distances[source][target]
+        for source in range(size)
+        for target in range(source + 1, size)
+    ]
+    metadata = {
+        "physical_links": network.number_of_edges(),
+        "actual_mean_degree": 2 * network.number_of_edges() / size,
+        "average_physical_link_distance_km": (
+            sum(
+                attributes["distance"]
+                for _, _, attributes in network.edges(data=True)
+            )
+            / network.number_of_edges()
+        ),
+        "average_route_distance_km": sum(route_distances) / len(route_distances),
+        "maximum_route_distance_km": max(route_distances),
+    }
+    return path, metadata
+
+
+def _node_profiles(size: int, rng: random.Random) -> list[dict]:
+    profiles = config.NODE_RESOURCE_PROFILES
+    counts = node_profile_counts(size)
+    assignments = [
+        profile
+        for profile in profiles
+        for _ in range(counts[profile["name"]])
+    ]
+    rng.shuffle(assignments)
+    return assignments
+
+
+def node_profile_counts(size: int) -> dict[str, int]:
+    profiles = config.NODE_RESOURCE_PROFILES
+    weighted_counts = [size * profile["percentage"] for profile in profiles]
+    counts = [count // 100 for count in weighted_counts]
+    remaining = size - sum(counts)
+    remainders = sorted(
+        range(len(profiles)),
+        key=lambda index: weighted_counts[index] % 100,
+        reverse=True,
+    )
+    for index in remainders[:remaining]:
+        counts[index] += 1
+    return {
+        profile["name"]: count
+        for profile, count in zip(profiles, counts, strict=True)
+    }
+
+
+def _build_controlled_network(
     parameters: dict,
     output_dir: Path,
     application: str,

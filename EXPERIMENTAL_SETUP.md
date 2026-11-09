@@ -3,9 +3,35 @@
 ## Objective
 
 Compare placement heuristics on synthetic microservice applications and
-Cloud-Edge infrastructures at one static snapshot. Each generated scenario has
-a known optimal placement, so heuristic SCI can be compared with a reference
-without running exhaustive search.
+Cloud-Edge infrastructures at one static snapshot. `SCENARIO_MODE` selects
+`random` (default) or `controlled`. Only controlled scenarios have a known
+optimal placement. Random generation restores the parameters and sampling
+from commit `747767d`, before controlled scenarios were introduced.
+
+## Random scenarios
+
+Service CPU (0.25–1.50 vCPU) and RAM (0.50–4 GB) requirements are sampled
+independently. Nodes can host multiple services, subject to all resource limits.
+Infrastructure profiles are assigned by largest-remainder allocation and shuffled:
+
+| Profile | Share | vCPU | RAM GB | Bandwidth | kW/vCPU | Embodied kgCO2eq |
+|---|---:|---:|---:|---:|---:|---:|
+| edge_small | 30% | 2 | 4 | 1 | 0.003 | 125 |
+| edge_medium | 30% | 4 | 8 | 2.5 | 0.004 | 250 |
+| edge_large | 20% | 8 | 16 | 5 | 0.005 | 500 |
+| cloud_medium | 15% | 16 | 32 | 10 | 0.007 | 1000 |
+| cloud_large | 5% | 32 | 64 | 25 | 0.009 | 2000 |
+
+Lifetime is uniform over 2–4 years, PUE over 1.1–1.6, carbon intensity over
+0.03–0.9, and physical-link distances over 5–1,000 km. Node resources are
+independent of application requirements. All app/infra-size pairs are included,
+giving 630 scenarios and 14 heuristic/scope configurations: **17,640 trials**
+with two route profiles. Neither `controlled` nor `exhaustive` runs in random
+mode. Optimal-reference fields are null; all four measured SCI contributions
+are retained. `scenario_mode` is stored in Ray configuration and the Parquet.
+
+The random run is named `network-sci-random-v1`; changing the mode also changes
+the default run name. Restart Ray after updating the code on a running cluster.
 
 ## Applications
 
@@ -16,7 +42,7 @@ probabilities. Interaction volumes are sampled from 0.00005–0.005 GB, and
 endpoint probabilities are normalized to one. Functional units remain
 25,000,000 per year.
 
-Service CPU requirements are sampled within 0.25–1.50 vCPU, sorted in
+In controlled mode, service CPU requirements are sampled within 0.25–1.50 vCPU, sorted in
 increasing order; RAM requirements are sampled within 0.50–4 GB, sorted in
 decreasing order. This makes each service's CPU/RAM requirement vector
 incomparable with every other service's vector. Bandwidth and time-in-reserve
@@ -83,7 +109,7 @@ enable them without changing the generated topology.
 
 ## Placement heuristics and grid size
 
-The grid includes `controlled` as the known-optimum baseline, `capacityonly(k)`
+The controlled grid includes `controlled` as the known-optimum baseline, `capacityonly(k)`
 and `greenonly(k)` for `k = 1, 100, 1000`, four `networkaware` weight settings,
 `scigreedy`, and `scilocalsearch`. Scope is varied for `controlled`,
 `scigreedy`, and `scilocalsearch`; other heuristics run once with
@@ -94,15 +120,19 @@ scenarios: **17,280 trials**. The `exhaustive` heuristic is not in this grid.
 
 ## Results and debug
 
-Every successful experiment stores the heuristic's four SCI components, the
-known-optimum SCI components, the optimal total for both scopes, and the known
+Every successful controlled experiment stores the heuristic's four SCI components,
+the known-optimum SCI components, the optimal total for both scopes, and the known
 placement. The `optimal_sci` column selects the reference matching that trial's
 scope. Generated-instance statistics and execution status are also retained.
 Ray configuration fields are flattened into the final Parquet for filtering.
 
-The full grid writes to:
+The controlled grid writes to:
 
-`results/parquets/network-sci-controlled/raw-sci-aware.parquet`
+`results/parquets/network-sci-controlled-v1/raw-sci-aware.parquet`
+
+The random grid writes to:
+
+`results/parquets/network-sci-random-v1/raw-sci-aware.parquet`
 
 Debug mode runs the single `DEBUG_CONFIG`; generated Prolog inputs remain in
 `debug-dir/`.

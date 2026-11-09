@@ -11,6 +11,7 @@ from sci_aware_msa_placement.experiment import Experiment
 
 
 CONFIG_COLUMNS = {
+    "config/scenario_mode": "scenario_mode",
     "config/scenario/seed": "seed",
     "config/scenario/application/size": "application_size",
     "config/scenario/application/topology": "application_topology",
