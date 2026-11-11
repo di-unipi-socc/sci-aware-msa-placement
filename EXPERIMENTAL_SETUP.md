@@ -4,7 +4,7 @@
 
 Compare placement heuristics on synthetic microservice applications and
 Cloud-Edge infrastructures at one static snapshot. `SCENARIO_MODE` selects
-`random` (default) or `controlled`. Only controlled scenarios have a known
+`random` or `controlled` (default). Only controlled scenarios have a known
 optimal placement. Random generation restores the parameters and sampling
 from commit `747767d`, before controlled scenarios were introduced.
 
@@ -30,7 +30,7 @@ with two route profiles. Neither `controlled` nor `exhaustive` runs in random
 mode. Optimal-reference fields are null; all four measured SCI contributions
 are retained. `scenario_mode` is stored in Ray configuration and the Parquet.
 
-The random run is named `network-sci-random-v1`; changing the mode also changes
+The random run is named `network-sci-random-v2`; changing the mode also changes
 the default run name. Restart Ray after updating the code on a running cluster.
 
 ## Applications
@@ -47,43 +47,53 @@ increasing order; RAM requirements are sampled within 0.50–4 GB, sorted in
 decreasing order. This makes each service's CPU/RAM requirement vector
 incomparable with every other service's vector. Bandwidth and time-in-reserve
 remain independently sampled from their configured ranges. The incomparable
-vectors prevent two services from sharing any generated node.
+vectors prevent a service from using another service's fit node. Dirty nodes
+can host multiple services subject to their resource and service-count limits.
 
 ## Controlled infrastructure and known optimum
 
-Each service has a dedicated **fit** node whose capacities equal that service's
-requirements. Extra nodes are split between **dirty** alternatives, whose
-capacities match selected service requirements, and **broken** nodes with zero
-capacity. Each fit and dirty node samples its component parameters uniformly
-from separate, non-overlapping ranges:
+Each service has a dedicated **fit** node with capacities equal to its requirements.
+Extra nodes are split approximately equally between dirty and broken nodes.
+Within each class, half are near and half far (rounded for odd counts).
+Broken nodes all use the green profile and have exactly one of CPU, RAM,
+inbound or outbound bandwidth zero; their other resources remain positive.
+Dirty capacities are the sum of the requirements of a randomly selected group
+of two or three services. `nodeServiceLimit/2` also enforces a maximum of two
+or three assigned services, independently of their individual sizes.
 
-| Profile | kW/vCPU | Lifetime (years) | Embodied kgCO2eq/vCPU | PUE | Carbon intensity |
-|---|---:|---:|---:|---:|---:|
-| Fit | 0.0025–0.0045 | 4–6 | 50–62.5 | 1.05–1.25 | 0.03–0.20 |
-| Dirty | 0.006–0.009 | 2–3 | 62.6–80 | 1.30–1.60 | 0.40–0.90 |
+| Class | Power kW/vCPU | PUE | CI kgCO2eq/kWh | Location |
+|---|---:|---:|---:|---|
+| Fit | 0.0025–0.0045 | 1.05–1.25 | 0.03–0.20 | Near |
+| Broken | 0.0025–0.0045 | 1.05–1.25 | 0.03–0.20 | Half near, half far |
+| Dirty near | Calibrated Pmin–1.2 Pmin | 1.30–1.60 | 0.40–0.90 | Near |
+| Dirty far | Calibrated Pmin–1.2 Pmin | 1.30–1.60 | 0.40–0.90 | Far |
 
-Broken nodes receive a shuffled, as-even-as-possible mix of fit-like and
-dirty-like energy profiles while retaining zero capacity. The embodied ranges
-bracket the cloud-large reference of 2,000 kgCO2eq over 32 vCPU. Even at the
-range limits, fit nodes have lower operational factors (at most 0.001125 versus
-at least 0.00312) and embodied factors per vCPU-year (at most 15.625 versus at
-least 20.87). Thus every eligible fit placement remains better on component SCI.
-All profile and link draws use deterministic random streams derived from the
-scenario seed, so placements are compared on the same generated infrastructure.
+Near-to-near physical links sample 1–5 km. Any link incident to a far node
+samples 700–1,000 km, preventing a far node from acquiring a short bypass.
+A fit chain and one short attachment per extra near node ensure connectivity
+of the near subgraph. NetworkX still supplies the underlying topology.
 
-The generated physical topology still follows the selected NetworkX graph and
-density. Fit-fit links sample 1–5 km; links involving a dirty or broken node
-sample 700–1,000 km. The lower bound for long links is raised when needed to
-remain above the longest possible fit-chain route. This keeps every fit-to-fit
-shortest route shorter than any route involving an alternative node.
+Dirty power is deliberately artificial: compute the fit placement's network
+SCI using the largest reference intensity among the configured route profiles.
+For each service, compute its fit component SCI and the coefficient multiplying
+`power × PUE × CI` in the actual component SCI formula. Choose a common factor
+so a dirty placement's operational SCI alone exceeds 1.1 times the sum of that
+service's fit component SCI and the entire fit network SCI. All dirty nodes use the same brown profile, regardless of location. Divide
+this factor by the dirty profile's minimum PUE and CI to get Pmin (at least
+0.006 kW/vCPU); sample power over Pmin–1.2 Pmin.
 
-The fit placement is optimal for both objectives: fit nodes have lower
-component operational and embodied SCI than dirty nodes, and fit-to-fit routes
-have lower network SCI than routes involving alternatives. Co-location cannot
-lower network SCI because the CPU/RAM requirement vectors permit at most one
-service per node. Broken nodes are ineligible. The generator records this fit
-placement in Prolog, and each trial evaluates its component/network SCI using
-the same SCI predicates used for heuristic placements.
+Every eligible move to a dirty node then costs more than even eliminating the
+entire network contribution. Fit nodes only accept their dedicated service and
+broken nodes are ineligible, so all-fit remains a global optimum for both scopes.
+This certificate uses no placement enumeration. It includes the component
+embodied term still present in Prolog; network embodied remains disabled by
+default. Power calibration is shared across peak/off-peak profiles to keep
+node attributes identical when comparing those profiles.
+
+All generated `node/6` and `route/4` fact lists are shuffled in Python with
+`rnd = random.Random(seed)` and `rnd.shuffle`, preserving predicate grouping.
+Controlled node identifiers are also assigned through a seeded shuffle.
+Inputs remain reproducible across heuristics and scopes.
 
 The search space excludes infrastructure sizes smaller than the service count
 plus two nodes, ensuring room for at least one dirty and one broken node. With
@@ -128,11 +138,11 @@ Ray configuration fields are flattened into the final Parquet for filtering.
 
 The controlled grid writes to:
 
-`results/parquets/network-sci-controlled-v1/raw-sci-aware.parquet`
+`results/parquets/network-sci-controlled-v2/raw-sci-aware.parquet`
 
 The random grid writes to:
 
-`results/parquets/network-sci-random-v1/raw-sci-aware.parquet`
+`results/parquets/network-sci-random-v2/raw-sci-aware.parquet`
 
 Debug mode runs the single `DEBUG_CONFIG`; generated Prolog inputs remain in
 `debug-dir/`.

@@ -1,4 +1,5 @@
 :- ['utils.pl', 'network.pl', 'score.pl', 'heuristics.pl'].
+:- dynamic nodeServiceLimit/2.
 
 :- set_prolog_flag(stack_limit, 128 000 000 000).
 :- set_prolog_flag(last_call_optimisation, true).
@@ -26,11 +27,19 @@ eligible([], P, P).
 
 placementNode(N, P, rr(CPUReq, RAMReq, BWinReq, BWoutReq)) :-
     node(N, tor(CPU, RAM, BWin, BWout), _, _, _, _),
+    serviceSlotAvailable(N, P),
     hardwareUsedAtNode(N, P, rr(UCPU, URAM, UBWin, UBWout)),
     CPU >= UCPU + CPUReq,
     RAM >= URAM + RAMReq,
     BWin >= UBWin + BWinReq,
     BWout >= UBWout + BWoutReq.
+
+serviceSlotAvailable(N, _) :- \+ nodeServiceLimit(N, _).
+serviceSlotAvailable(N, P) :-
+    nodeServiceLimit(N, Limit),
+    findall(M, member(on(M,N),P), Services),
+    length(Services, Count),
+    Count < Limit.
 
 involvedNodes(P, InvolvedNodes) :-
     findall(N, distinct(node(N,_), member(on(_,N),P)), Nodes),

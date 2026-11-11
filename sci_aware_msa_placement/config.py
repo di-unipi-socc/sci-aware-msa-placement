@@ -12,8 +12,8 @@ PROLOG_DIR = PROJECT_ROOT / "prolog"
 PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 
 # Execution
-SCENARIO_MODE = "random"  # "random" or "controlled"
-EXPERIMENT_NAME = f"network-sci-{SCENARIO_MODE}-v1"
+SCENARIO_MODE = "controlled"  # "random" or "controlled"
+EXPERIMENT_NAME = f"network-sci-{SCENARIO_MODE}-v2"
 RAY_ADDRESS = "auto"
 TIMEOUT_SECONDS = 1800
 ENCODING = "utf-8"
@@ -159,8 +159,8 @@ INTERACTION_GB_RANGE = (0.00005, 0.005)
 FUNCTIONAL_UNITS = 25_000_000
 
 # Controlled scenarios: fit nodes are service-specific; dirty nodes are feasible
-# alternatives; broken nodes have no capacity. Fit CPU/RAM vectors are
-# pairwise incomparable, preventing service co-location.
+# alternatives hosting 2-3 services; broken nodes have one zero resource.
+# Fit CPU/RAM vectors are pairwise incomparable.
 CONTROLLED_FIT_PROFILE = {
     "power_per_cpu": (0.0025, 0.0045),
     "expected_lifetime": (4.0, 6.0),
@@ -177,6 +177,9 @@ CONTROLLED_DIRTY_PROFILE = {
 }
 CONTROLLED_SHORT_LINK_KM_RANGE = (1.0, 5.0)
 CONTROLLED_LONG_LINK_KM_RANGE = (700.0, 1000.0)
+CONTROLLED_DIRTY_SERVICE_LIMITS = (2, 3)
+CONTROLLED_NETWORK_MARGIN = 1.1
+CONTROLLED_POWER_RANGE_FACTOR = 1.2
 
 
 # Random infrastructure: restored from the pre-controlled setup.

@@ -64,7 +64,7 @@ Its generated inputs remain available in `debug-dir/`. Change `DEBUG_DIR` in
 Results are saved as:
 
 ```text
-results/parquets/network-sci-random-v1/raw-sci-aware.parquet
+results/parquets/network-sci-random-v2/raw-sci-aware.parquet
 ```
 
 Each Ray Tune trial generates its Prolog inputs in a temporary directory and
@@ -89,20 +89,21 @@ The Ray Tune search space is defined in
 - random resource profiles or controlled fit, dirty, and broken nodes
 - component and network operational and embodied SCI outputs
 
-Set `SCENARIO_MODE = "random"` (default) to restore the pre-controlled generator:
+Set `SCENARIO_MODE = "random"` to restore the pre-controlled generator:
 independent application requirements, five resource profiles and random link
-distances. The run name is `network-sci-random-v1`; optimal-reference fields are
+distances. The run name is `network-sci-random-v2`; optimal-reference fields are
 null. Random mode includes all app/infra-size pairs and excludes `controlled`.
 See `EXPERIMENTAL_SETUP.md` for the restored ranges and profile percentages.
 
-Set `SCENARIO_MODE = "controlled"` for the known-optimum benchmark.
-Each controlled scenario has one fit node per service. CPU/RAM requirements prevent
-co-location; sampled fit and dirty profiles retain strict component-SCI
-separation, and sampled fit-fit routes remain shorter than routes involving
-dirty or broken nodes. The all-fit placement therefore provides a known optimum
-for both scopes. Its SCI breakdown and placement are included in every trial
-result; `exhaustive` is no longer run. Broken nodes receive either a fit-like
-or dirty-like energy profile but have zero capacity.
+Set `SCENARIO_MODE = "controlled"` (default) for the known-optimum benchmark.
+Each controlled scenario has one fit node per service, larger dirty alternatives
+hosting at most 2–3 services, and green broken nodes with one resource zero.
+All dirty nodes use a brown profile and are split into near and far groups; broken nodes are
+half near and half far. Artificial dirty power is calibrated so co-location
+cannot improve on the all-fit optimum. Generated node and route facts are
+shuffled in Python using the scenario seed. See `EXPERIMENTAL_SETUP.md` for the
+ranges and the optimum certificate. Component embodied SCI remains included;
+network embodied SCI is disabled by default.
 
 Set `FIX_TOPOLOGY_DENSITY = False` in `config.py` to evaluate all nine
 topology-density combinations instead of the three fixed scenarios.
@@ -111,8 +112,8 @@ Existing Ray Tune state is restored by default. Unfinished trials resume and
 errored trials restart according to the `RESUME_*` and
 `RESTART_ERRORED_TRIALS` settings in `config.py`.
 
-Experiment names include the scenario mode (`network-sci-random-v1` or
-`network-sci-controlled-v1`) so the two modes have separate Ray state and outputs.
+Experiment names include the scenario mode (`network-sci-random-v2` or
+`network-sci-controlled-v2`) so the two modes have separate Ray state and outputs.
 
 ### Analyse Results
 

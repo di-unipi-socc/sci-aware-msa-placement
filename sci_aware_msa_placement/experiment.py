@@ -31,14 +31,14 @@ class Experiment:
             application_path, application, application_metadata = build_application(
                 self.parameters, self.work_dir
             )
-            service_requirements = application_metadata.pop(
-                "_service_requirements"
-            )
+            service_requirements = application_metadata.pop("_service_requirements")
+            application_data = application_metadata.pop("_application_data")
             infrastructure_path, infrastructure_metadata = build_network(
                 self.parameters,
                 self.work_dir,
                 application,
                 service_requirements,
+                application_data,
             )
             result.update(application_metadata)
             result.update(infrastructure_metadata)
@@ -84,7 +84,10 @@ class Experiment:
                 f"networkSCI({application},P,NetworkOperationalSCI,"
                 "NetworkEmbodiedSCI)."
             )
-            if self.parameters.get("scenario_mode", config.SCENARIO_MODE) == "controlled":
+            if (
+                self.parameters.get("scenario_mode", config.SCENARIO_MODE)
+                == "controlled"
+            ):
                 query = query[:-1] + (
                     f",controlledPlacement({application},OptimalP),"
                     f"componentPlacementSCI({application},OptimalP,"
@@ -115,8 +118,12 @@ class Experiment:
         if component_operational is not None:
             components_only_sci = component_operational + component_embodied
             components_and_network_sci = sum(
-                (component_operational, component_embodied,
-                 network_operational, network_embodied)
+                (
+                    component_operational,
+                    component_embodied,
+                    network_operational,
+                    network_embodied,
+                )
             )
         optimal_sci = (
             components_and_network_sci
@@ -138,7 +145,8 @@ class Experiment:
             "optimal_sci": optimal_sci,
             "optimal_placement": (
                 json.dumps(result["OptimalP"], separators=(",", ":"))
-                if "OptimalP" in result else None
+                if "OptimalP" in result
+                else None
             ),
             "nodes_used": result.get("N"),
             "placement": json.dumps(result.get("P"), separators=(",", ":")),
