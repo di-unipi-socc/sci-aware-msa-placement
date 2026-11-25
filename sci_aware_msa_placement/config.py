@@ -12,8 +12,7 @@ PROLOG_DIR = PROJECT_ROOT / "prolog"
 PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 
 # Execution
-SCENARIO_MODE = "controlled"  # "random" or "controlled"
-EXPERIMENT_NAME = f"network-sci-{SCENARIO_MODE}-v2"
+EXPERIMENT_NAME = "network-sci-milp-v1"
 RAY_ADDRESS = "auto"
 TIMEOUT_SECONDS = 1800
 ENCODING = "utf-8"
@@ -46,7 +45,7 @@ NETWORK_WEIGHTS = [
     (0.20, 0.20, 0.60),
 ]
 HEURISTICS = [
-    *(["controlled"] if SCENARIO_MODE == "controlled" else []),
+    "optimum",
     *(f"capacityonly({k})" for k in TOP_K_VALUES),
     *(f"greenonly({k})" for k in TOP_K_VALUES),
     *(
@@ -57,7 +56,7 @@ HEURISTICS = [
     "scilocalsearch",
 ]
 SCOPES = ["components_only", "components_and_network"]
-SCOPE_DEPENDENT_HEURISTICS = {"controlled", "scigreedy", "scilocalsearch"}
+SCOPE_DEPENDENT_HEURISTICS = {"optimum", "scigreedy", "scilocalsearch"}
 PLACEMENT_CONFIGS = [
     {"heuristic": heuristic, "scope": scope}
     for heuristic in HEURISTICS
@@ -109,11 +108,9 @@ SCENARIOS = [
     for application in APPLICATIONS
     for infrastructure_size in INFRASTRUCTURE_SIZES
     for infrastructure_graph in INFRASTRUCTURE_GRAPHS
-    if SCENARIO_MODE == "random" or infrastructure_size >= application["size"] + 2
 ]
 
 SEARCH_SPACE = {
-    "scenario_mode": SCENARIO_MODE,
     "scenario": tune.grid_search(SCENARIOS),
     "placement": tune.grid_search(PLACEMENT_CONFIGS),
     "route_profile": tune.grid_search(ROUTE_PROFILES),
@@ -121,7 +118,6 @@ SEARCH_SPACE = {
 }
 
 DEBUG_CONFIG = {
-    "scenario_mode": SCENARIO_MODE,
     "seed": 42,
     "application": APPLICATIONS[0],
     "infrastructure_size": 16,
@@ -158,31 +154,7 @@ TIME_IN_RESERVE_RANGE = (0.10, 1.00)
 INTERACTION_GB_RANGE = (0.00005, 0.005)
 FUNCTIONAL_UNITS = 25_000_000
 
-# Controlled scenarios: fit nodes are service-specific; dirty nodes are feasible
-# alternatives hosting 2-3 services; broken nodes have one zero resource.
-# Fit CPU/RAM vectors are pairwise incomparable.
-CONTROLLED_FIT_PROFILE = {
-    "power_per_cpu": (0.0025, 0.0045),
-    "expected_lifetime": (4.0, 6.0),
-    "embodied_emissions_per_cpu": (50.0, 62.5),
-    "pue": (1.05, 1.25),
-    "carbon_intensity": (0.03, 0.20),
-}
-CONTROLLED_DIRTY_PROFILE = {
-    "power_per_cpu": (0.006, 0.009),
-    "expected_lifetime": (2.0, 3.0),
-    "embodied_emissions_per_cpu": (62.6, 80.0),
-    "pue": (1.30, 1.60),
-    "carbon_intensity": (0.40, 0.90),
-}
-CONTROLLED_SHORT_LINK_KM_RANGE = (1.0, 5.0)
-CONTROLLED_LONG_LINK_KM_RANGE = (700.0, 1000.0)
-CONTROLLED_DIRTY_SERVICE_LIMITS = (2, 3)
-CONTROLLED_NETWORK_MARGIN = 1.1
-CONTROLLED_POWER_RANGE_FACTOR = 1.2
-
-
-# Random infrastructure: restored from the pre-controlled setup.
+# Random infrastructure
 NODE_RESOURCE_PROFILES = [
     {
         "name": "edge_small",
@@ -234,3 +206,13 @@ EXPECTED_LIFETIME_RANGE = (2.0, 4.0)
 PUE_RANGE = (1.1, 1.6)
 CARBON_INTENSITY_RANGE = (0.03, 0.9)
 LINK_DISTANCE_KM_RANGE = (5.0, 1000.0)
+
+
+# MILP baseline
+MILP_SOLVER = "SCIP"
+MILP_TIMEOUT_SECONDS = None  # None: unlimited; otherwise a positive number of seconds
+MILP_THREADS = 1
+MILP_OBJECTIVE_SCALE = 1_000_000_000.0
+MILP_SCIP_PARAMETERS = "limits/gap = 0\nlimits/absgap = 0\nnumerics/feastol = 1e-9"
+MILP_VALIDATION_RTOL = 1e-8
+MILP_VALIDATION_ATOL = 1e-12

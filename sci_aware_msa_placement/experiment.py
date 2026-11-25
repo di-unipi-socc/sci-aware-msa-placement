@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -6,6 +7,7 @@ from swiplserver import PrologMQI, PrologQueryTimeoutError
 
 from sci_aware_msa_placement import config
 from sci_aware_msa_placement.builder import build_application, build_network
+from sci_aware_msa_placement.optimum import SOLVER_COLUMNS, solve_optimum
 from sci_aware_msa_placement.utils import parse_prolog
 
 
@@ -15,163 +17,131 @@ class Experiment:
         self.work_dir = work_dir
 
     def run(self) -> dict[str, Any]:
-        result = {
-            "application_edges": None,
-            "actual_endpoint_count": None,
-            "average_interaction_gb": None,
-            "expected_traffic_gb_per_invocation": None,
-            "physical_links": None,
-            "actual_mean_degree": None,
-            "average_physical_link_distance_km": None,
-            "average_route_distance_km": None,
-            "maximum_route_distance_km": None,
-        }
-        result.update(self._empty_placement_result())
+        result = dict.fromkeys(
+            [
+                "application_edges",
+                "actual_endpoint_count",
+                "average_interaction_gb",
+                "expected_traffic_gb_per_invocation",
+                "physical_links",
+                "actual_mean_degree",
+                "average_physical_link_distance_km",
+                "average_route_distance_km",
+                "maximum_route_distance_km",
+                "time",
+                "nodes_used",
+                "placement",
+                "component_operational_sci",
+                "component_embodied_sci",
+                "network_operational_sci",
+                "network_embodied_sci",
+                *SOLVER_COLUMNS,
+            ]
+        )
+        result.update(success=False, timeout=False, error=None)
         try:
-            application_path, application, application_metadata = build_application(
+            app_path, application, app_metadata = build_application(
                 self.parameters, self.work_dir
             )
-            service_requirements = application_metadata.pop("_service_requirements")
-            application_data = application_metadata.pop("_application_data")
-            infrastructure_path, infrastructure_metadata = build_network(
-                self.parameters,
-                self.work_dir,
-                application,
-                service_requirements,
-                application_data,
+            app_data = app_metadata.pop("_application_data")
+            infra_path, infra_metadata = build_network(self.parameters, self.work_dir)
+            network_data = infra_metadata.pop("_network_data")
+            result.update(app_metadata)
+            result.update(infra_metadata)
+            placement, elapsed = None, None
+            if self.parameters["heuristic"] == "optimum":
+                placement, statistics = solve_optimum(
+                    app_data, network_data, self.parameters
+                )
+                result.update(statistics)
+                elapsed = (
+                    statistics["solver_model_seconds"]
+                    + statistics["solver_solve_seconds"]
+                )
+                result["time"] = elapsed
+                if placement is None:
+                    result["error"] = (
+                        f"MILP did not certify an optimum: {statistics['solver_status']}"
+                    )
+                    return result
+            metrics = self._run_prolog(
+                application, app_path, infra_path, placement, elapsed
             )
-            result.update(application_metadata)
-            result.update(infrastructure_metadata)
-            prolog_result = self._run_prolog(
-                application, application_path, infrastructure_path
-            )
-            result.update(
-                success=prolog_result["error"] is None,
-                timeout=False,
-                **prolog_result,
-            )
+            result.update(metrics)
+            if result["solver_status"] == "optimal" and metrics["error"] is None:
+                measured = (
+                    metrics["component_operational_sci"]
+                    + metrics["component_embodied_sci"]
+                )
+                if self.parameters["scope"] == "components_and_network":
+                    measured += (
+                        metrics["network_operational_sci"]
+                        + metrics["network_embodied_sci"]
+                    )
+                if not math.isclose(
+                    measured,
+                    result["solver_objective_sci"],
+                    rel_tol=config.MILP_VALIDATION_RTOL,
+                    abs_tol=config.MILP_VALIDATION_ATOL,
+                ):
+                    raise ValueError(
+                        f"MILP/Prolog SCI mismatch: {result['solver_objective_sci']} vs {measured}"
+                    )
+            result["success"] = metrics["error"] is None
         except PrologQueryTimeoutError:
             result.update(
                 success=False,
                 timeout=True,
-                error=f"Query timed out after {config.TIMEOUT_SECONDS} seconds",
+                error=f"Prolog query timed out after {config.TIMEOUT_SECONDS} seconds",
             )
         except Exception as error:
-            result.update(success=False, timeout=False, error=str(error))
+            result.update(success=False, error=str(error))
         return result
 
     def _run_prolog(
-        self,
-        application: str,
-        application_path: Path,
-        infrastructure_path: Path,
-    ) -> dict[str, Any]:
+        self, application, app_path, infra_path, placement=None, elapsed=None
+    ):
+        timeout = (
+            None
+            if self.parameters["heuristic"] == "optimum"
+            else config.TIMEOUT_SECONDS
+        )
         with (
-            PrologMQI(query_timeout_seconds=config.TIMEOUT_SECONDS) as mqi,
+            PrologMQI(query_timeout_seconds=timeout) as mqi,
             mqi.create_thread() as prolog,
         ):
-            for path in (
-                config.PLACEMENT_PL,
-                application_path,
-                infrastructure_path,
-            ):
+            for path in (config.PLACEMENT_PL, app_path, infra_path):
                 prolog.query(f"consult('{path.as_posix()}').")
+            if placement is None:
+                prefix = (
+                    f"timedPlacement({self.parameters['heuristic']},"
+                    f"{self.parameters['scope']},{application},P,_,N,Time),"
+                )
+            else:
+                atoms = ",".join(f"on({m},{n})" for m, n in placement)
+                prefix = (
+                    f"P=[{atoms}],Time={elapsed!r},involvedNodes(P,N),"
+                    "forall(member(on(M,Node),P),(microservice(M,RR,_),"
+                    "select(on(M,Node),P,Rest),placementNode(Node,Rest,RR))),"
+                )
             query = (
-                f"timedPlacement({self.parameters['heuristic']},"
-                f"{self.parameters['scope']},{application},P,_,N,Time),"
-                f"componentPlacementSCI({application},P,"
-                "ComponentOperationalSCI,ComponentEmbodiedSCI),"
-                f"networkSCI({application},P,NetworkOperationalSCI,"
-                "NetworkEmbodiedSCI)."
+                prefix
+                + f"componentPlacementSCI({application},P,ComponentOperationalSCI,ComponentEmbodiedSCI),"
+                f"networkSCI({application},P,NetworkOperationalSCI,NetworkEmbodiedSCI)"
             )
-            if (
-                self.parameters.get("scenario_mode", config.SCENARIO_MODE)
-                == "controlled"
-            ):
-                query = query[:-1] + (
-                    f",controlledPlacement({application},OptimalP),"
-                    f"componentPlacementSCI({application},OptimalP,"
-                    "OptimalComponentOperationalSCI,"
-                    "OptimalComponentEmbodiedSCI),"
-                    f"networkSCI({application},OptimalP,"
-                    "OptimalNetworkOperationalSCI,OptimalNetworkEmbodiedSCI)."
-                )
-            prolog.query_async(query, find_all=False)
-            raw_result = prolog.query_async_result()
-        return self._normalize_result(parse_prolog(raw_result))
-
-    def _normalize_result(self, result: Any) -> dict[str, Any]:
-        if isinstance(result, list):
-            result = result[0] if result else False
-        if not isinstance(result, dict):
-            return {
-                **self._empty_placement_result(),
-                "error": "No solution found",
-            }
-
-        component_operational = result.get("OptimalComponentOperationalSCI")
-        component_embodied = result.get("OptimalComponentEmbodiedSCI")
-        network_operational = result.get("OptimalNetworkOperationalSCI")
-        network_embodied = result.get("OptimalNetworkEmbodiedSCI")
-        components_only_sci = None
-        components_and_network_sci = None
-        if component_operational is not None:
-            components_only_sci = component_operational + component_embodied
-            components_and_network_sci = sum(
-                (
-                    component_operational,
-                    component_embodied,
-                    network_operational,
-                    network_embodied,
-                )
-            )
-        optimal_sci = (
-            components_and_network_sci
-            if self.parameters["scope"] == "components_and_network"
-            else components_only_sci
-        )
+            prolog.query_async(f"once(({query})).", find_all=False)
+            raw = parse_prolog(prolog.query_async_result())
+        if isinstance(raw, list):
+            raw = raw[0] if raw else False
+        if not isinstance(raw, dict):
+            return {"error": "No eligible solution found"}
         return {
-            "time": result.get("Time"),
-            "component_operational_sci": result.get("ComponentOperationalSCI"),
-            "component_embodied_sci": result.get("ComponentEmbodiedSCI"),
-            "network_operational_sci": result.get("NetworkOperationalSCI"),
-            "network_embodied_sci": result.get("NetworkEmbodiedSCI"),
-            "optimal_component_operational_sci": component_operational,
-            "optimal_component_embodied_sci": component_embodied,
-            "optimal_network_operational_sci": network_operational,
-            "optimal_network_embodied_sci": network_embodied,
-            "optimal_components_only_sci": components_only_sci,
-            "optimal_components_and_network_sci": components_and_network_sci,
-            "optimal_sci": optimal_sci,
-            "optimal_placement": (
-                json.dumps(result["OptimalP"], separators=(",", ":"))
-                if "OptimalP" in result
-                else None
-            ),
-            "nodes_used": result.get("N"),
-            "placement": json.dumps(result.get("P"), separators=(",", ":")),
+            "time": raw["Time"],
+            "nodes_used": raw["N"],
+            "placement": json.dumps(raw["P"], separators=(",", ":")),
+            "component_operational_sci": raw["ComponentOperationalSCI"],
+            "component_embodied_sci": raw["ComponentEmbodiedSCI"],
+            "network_operational_sci": raw["NetworkOperationalSCI"],
+            "network_embodied_sci": raw["NetworkEmbodiedSCI"],
             "error": None,
-        }
-
-    @staticmethod
-    def _empty_placement_result() -> dict[str, Any]:
-        return {
-            "success": False,
-            "timeout": False,
-            "error": None,
-            "time": None,
-            "component_operational_sci": None,
-            "component_embodied_sci": None,
-            "network_operational_sci": None,
-            "network_embodied_sci": None,
-            "optimal_component_operational_sci": None,
-            "optimal_component_embodied_sci": None,
-            "optimal_network_operational_sci": None,
-            "optimal_network_embodied_sci": None,
-            "optimal_components_only_sci": None,
-            "optimal_components_and_network_sci": None,
-            "optimal_sci": None,
-            "optimal_placement": None,
-            "nodes_used": None,
-            "placement": None,
         }

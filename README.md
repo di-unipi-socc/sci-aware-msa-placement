@@ -64,7 +64,7 @@ Its generated inputs remain available in `debug-dir/`. Change `DEBUG_DIR` in
 Results are saved as:
 
 ```text
-results/parquets/network-sci-random-v2/raw-sci-aware.parquet
+results/parquets/network-sci-milp-v1/raw-sci-aware.parquet
 ```
 
 Each Ray Tune trial generates its Prolog inputs in a temporary directory and
@@ -82,28 +82,19 @@ The Ray Tune search space is defined in
 - sparse, medium, and dense infrastructures with target mean degree 2, 4, and 8
 - fixed topology-density scenarios by default: ER-dense, BA-medium, and AS-sparse
 - component-only and component-plus-network SCI
-- controlled known-optimum, top-k, network-aware, SCI-greedy, and SCI local-search placements
+- SCIP-certified MILP optimum, top-k, network-aware, SCI-greedy and local-search placements
 - multiple seeds, top-k values, and network-aware weights
 - RENATER Montpellier peak and off-peak route profiles
 - network embodied emissions fixed to zero
-- random resource profiles or controlled fit, dirty, and broken nodes
+- random resource profiles independent of application requirements
 - component and network operational and embodied SCI outputs
 
-Set `SCENARIO_MODE = "random"` to restore the pre-controlled generator:
-independent application requirements, five resource profiles and random link
-distances. The run name is `network-sci-random-v2`; optimal-reference fields are
-null. Random mode includes all app/infra-size pairs and excludes `controlled`.
-See `EXPERIMENTAL_SETUP.md` for the restored ranges and profile percentages.
-
-Set `SCENARIO_MODE = "controlled"` (default) for the known-optimum benchmark.
-Each controlled scenario has one fit node per service, larger dirty alternatives
-hosting at most 2–3 services, and green broken nodes with one resource zero.
-All dirty nodes use a brown profile and are split into near and far groups; broken nodes are
-half near and half far. Artificial dirty power is calibrated so co-location
-cannot improve on the all-fit optimum. Generated node and route facts are
-shuffled in Python using the scenario seed. See `EXPERIMENTAL_SETUP.md` for the
-ranges and the optimum certificate. Component embodied SCI remains included;
-network embodied SCI is disabled by default.
+All scenarios use the random generator, with the same resource profiles and
+parameter ranges as before. `optimum` solves an OR-Tools/SCIP MILP without a
+time limit by default, separately for component-only and component-plus-network SCI.
+Only certified optima are joined to the corresponding heuristic results;
+missing baseline references remain null. No artificial node classes are used.
+See `EXPERIMENTAL_SETUP.md` for the formulation, ranges and result schema.
 
 Set `FIX_TOPOLOGY_DENSITY = False` in `config.py` to evaluate all nine
 topology-density combinations instead of the three fixed scenarios.
@@ -112,17 +103,18 @@ Existing Ray Tune state is restored by default. Unfinished trials resume and
 errored trials restart according to the `RESUME_*` and
 `RESTART_ERRORED_TRIALS` settings in `config.py`.
 
-Experiment names include the scenario mode (`network-sci-random-v2` or
-`network-sci-controlled-v2`) so the two modes have separate Ray state and outputs.
+The experiment name is `network-sci-milp-v1`, with separate Ray state and outputs
+from previous experiments. The full grid has 20,160 trials, including 2,520
+MILP baseline trials. `MILP_TIMEOUT_SECONDS = None` disables the MILP timeout;
+set it to a positive number of seconds to impose a limit. Uncertified solutions
+are excluded from optimum references. The 1,800-second Prolog limit applies to
+heuristic queries only.
 
 ### Analyse Results
 
-The notebook in `results-network/` reads the compact Parquet schema and derives
-aggregate SCI values from the four stored atomic SCI columns:
-
-```text
-results-network/analyse.ipynb
-```
+`results/notebooks/network.ipynb` reads the new Parquet, joins each heuristic
+with its certified MILP baseline and supports absolute, percentage and ratio
+comparisons. Missing baseline references are excluded from gap plots.
 
 ## Citation
 

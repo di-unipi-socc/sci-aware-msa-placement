@@ -1,6 +1,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import numpy as np
 import pandas as pd
 import ray
 from ray import tune
@@ -8,10 +9,10 @@ from ray.tune import RunConfig
 
 from sci_aware_msa_placement import config
 from sci_aware_msa_placement.experiment import Experiment
+from sci_aware_msa_placement.optimum import SOLVER_COLUMNS
 
 
 CONFIG_COLUMNS = {
-    "config/scenario_mode": "scenario_mode",
     "config/scenario/seed": "seed",
     "config/scenario/application/size": "application_size",
     "config/scenario/application/topology": "application_topology",
@@ -42,16 +43,6 @@ SCI_COLUMNS = [
     "component_embodied_sci",
     "network_operational_sci",
     "network_embodied_sci",
-]
-OPTIMAL_SCI_COLUMNS = [
-    "optimal_component_operational_sci",
-    "optimal_component_embodied_sci",
-    "optimal_network_operational_sci",
-    "optimal_network_embodied_sci",
-    "optimal_components_only_sci",
-    "optimal_components_and_network_sci",
-    "optimal_sci",
-    "optimal_placement",
 ]
 
 
@@ -100,15 +91,69 @@ def prepare_results(dataframe: pd.DataFrame) -> pd.DataFrame:
         configuration["heuristic"].map(heuristic_parameters).tolist(),
         index=dataframe.index,
     )
-    results = dataframe[
-        [
-            *STATISTIC_COLUMNS,
-            *EXECUTION_COLUMNS,
-            *SCI_COLUMNS,
-            *OPTIMAL_SCI_COLUMNS,
-        ]
+    measured = dataframe.reindex(
+        columns=[*STATISTIC_COLUMNS, *EXECUTION_COLUMNS, *SCI_COLUMNS, *SOLVER_COLUMNS]
+    )
+    results = pd.concat([configuration, heuristic_data, measured], axis=1)
+    return attach_optima(results)
+
+
+def attach_optima(results: pd.DataFrame) -> pd.DataFrame:
+    results = results.copy()
+    results[SCI_COLUMNS] = results[SCI_COLUMNS].apply(pd.to_numeric, errors="raise")
+    results["component_sci"] = (
+        results["component_operational_sci"] + results["component_embodied_sci"]
+    )
+    results["network_sci"] = (
+        results["network_operational_sci"] + results["network_embodied_sci"]
+    )
+    results["objective_sci"] = results["component_sci"] + np.where(
+        results["scope"] == "components_and_network", results["network_sci"], 0
+    )
+    keys = [column for column in CONFIG_COLUMNS.values() if column != "heuristic"]
+    references = results.loc[
+        (results["heuristic"] == "optimum")
+        & results["success"]
+        & (results["solver_status"] == "optimal")
     ]
-    return pd.concat([configuration, heuristic_data, results], axis=1)
+    reference_columns = [*SCI_COLUMNS, "objective_sci", "placement"]
+    renamed = {column: f"optimal_{column}" for column in SCI_COLUMNS}
+    renamed.update(objective_sci="optimal_sci", placement="optimal_placement")
+    results = results.merge(
+        references[keys + reference_columns].rename(columns=renamed),
+        on=keys,
+        how="left",
+        validate="many_to_one",
+    )
+    # The two scopes generally have different optimal placements.
+    instance_keys = [key for key in keys if key != "scope"]
+    for scope in config.SCOPES:
+        column = f"optimal_{scope}_sci"
+        scoped = references.loc[
+            references["scope"] == scope, [*instance_keys, "objective_sci"]
+        ]
+        results = results.merge(
+            scoped.rename(columns={"objective_sci": column}),
+            on=instance_keys,
+            how="left",
+            validate="many_to_one",
+        )
+    same = np.isclose(
+        results["objective_sci"],
+        results["optimal_sci"],
+        rtol=config.MILP_VALIDATION_RTOL,
+        atol=config.MILP_VALIDATION_ATOL,
+    )
+    if (
+        (results["objective_sci"] < results["optimal_sci"]) & ~same & results["success"]
+    ).any():
+        raise ValueError("A heuristic SCI is below its certified optimum")
+    results["optimality_ratio"] = results["objective_sci"] / results["optimal_sci"]
+    results.loc[same, "optimality_ratio"] = 1.0
+    results["optimality_gap_pct"] = 100 * (results["optimality_ratio"] - 1)
+    results["absolute_gap_sci"] = results["objective_sci"] - results["optimal_sci"]
+    results.loc[same, "absolute_gap_sci"] = 0.0
+    return results
 
 
 def build_tuner() -> tune.Tuner:

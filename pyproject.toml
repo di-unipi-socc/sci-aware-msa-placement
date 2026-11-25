@@ -13,6 +13,7 @@ dependencies = [
     "numpy>=2.4.5",
     "pandas>=3.0.3",
     "ipykernel>=7.4.0",
+    "ortools>=9.15.6755",
 ]
 
 

@@ -1,20 +1,29 @@
 # Experimental setup
 
-## Objective
+## Random instances
 
-Compare placement heuristics on synthetic microservice applications and
-Cloud-Edge infrastructures at one static snapshot. `SCENARIO_MODE` selects
-`random` or `controlled` (default). Only controlled scenarios have a known
-optimal placement. Random generation restores the parameters and sampling
-from commit `747767d`, before controlled scenarios were introduced.
+All experiments use random instances. The generator preserves the pre-existing
+random setup, with no artificial node classes, service-slot limits, power
+calibration or guaranteed placement. Node and route facts are shuffled using the
+scenario seed. Applications use ER or BA graphs with 10, 20 or 40 services, or
+Online Boutique's 10-service topology and endpoint probabilities. Synthetic
+applications distribute their interactions over up to six endpoints.
 
-## Random scenarios
+| Application parameter | Range |
+|---|---|
+| CPU | 0.25–1.50 vCPU |
+| RAM | 0.50–4 GB |
+| Inbound/outbound bandwidth | 0.01–0.40 each |
+| Time in reserve | 0.10–1.00 |
+| Interaction volume | 0.00005–0.005 GB/invocation |
+| Functional units | 25,000,000/year |
 
-Service CPU (0.25–1.50 vCPU) and RAM (0.50–4 GB) requirements are sampled
-independently. Nodes can host multiple services, subject to all resource limits.
-Infrastructure profiles are assigned by largest-remainder allocation and shuffled:
+CPU and RAM are independently sampled; services can share nodes subject to
+CPU, RAM and inbound/outbound bandwidth capacities. Endpoint probabilities
+weight both component and network contributions. Component incidence counts
+one occurrence per service per endpoint; network SCI counts every interaction.
 
-| Profile | Share | vCPU | RAM GB | Bandwidth | kW/vCPU | Embodied kgCO2eq |
+| Node profile | Share | vCPU | RAM GB | Bandwidth | kW/vCPU | Embodied kgCO2eq |
 |---|---:|---:|---:|---:|---:|---:|
 | edge_small | 30% | 2 | 4 | 1 | 0.003 | 125 |
 | edge_medium | 30% | 4 | 8 | 2.5 | 0.004 | 250 |
@@ -22,127 +31,88 @@ Infrastructure profiles are assigned by largest-remainder allocation and shuffle
 | cloud_medium | 15% | 16 | 32 | 10 | 0.007 | 1000 |
 | cloud_large | 5% | 32 | 64 | 25 | 0.009 | 2000 |
 
-Lifetime is uniform over 2–4 years, PUE over 1.1–1.6, carbon intensity over
-0.03–0.9, and physical-link distances over 5–1,000 km. Node resources are
-independent of application requirements. All app/infra-size pairs are included,
-giving 630 scenarios and 14 heuristic/scope configurations: **17,640 trials**
-with two route profiles. Neither `controlled` nor `exhaustive` runs in random
-mode. Optimal-reference fields are null; all four measured SCI contributions
-are retained. `scenario_mode` is stored in Ray configuration and the Parquet.
+Node counts use largest-remainder allocation and shuffled profile assignments.
+Lifetime is uniform over 2–4 years, PUE over 1.1–1.6 and CI over 0.03–0.9.
+Physical links sample 5–1,000 km. Infrastructure sizes are 16, 32, 64, 128, 256
+and 512 nodes; native NetworkX ER, BA and Internet-AS generators are used.
+Fixed topology/density pairs are ER/dense, BA/medium and IAAG/sparse, targeting
+mean degrees 8, 4 and 2. `FIX_TOPOLOGY_DENSITY = False` enables their Cartesian
+product. Disconnected components are joined; all-pairs shortest-path distances
+are written as end-to-end `route/4` facts. All app/infra-size combinations are
+retained, including applications with more services than infrastructure nodes.
 
-The random run is named `network-sci-random-v2`; changing the mode also changes
-the default run name. Restart Ray after updating the code on a running cluster.
+RENATER Montpellier peak/off-peak coefficients are respectively 0.000793 and
+0.001400 kgCO2eq/GB, normalized to 700 km. Network embodied is disabled by
+default; when enabled, its coefficient is 0.000493 kgCO2eq/GB. Component embodied
+continues to be included, following the original Prolog formula.
 
-## Applications
+## OR-Tools/SCIP optimum
 
-The grid includes synthetic Erdős–Rényi and Barabási–Albert applications with
-10, 20, or 40 services, plus Online Boutique's 10-service topology. Synthetic
-applications use six endpoints; Online Boutique keeps its endpoint groups and
-probabilities. Interaction volumes are sampled from 0.00005–0.005 GB, and
-endpoint probabilities are normalized to one. Functional units remain
-25,000,000 per year.
+`optimum` is a separate Python baseline, not a Prolog placement heuristic.
+Binary x(service,node) variables enforce exactly one node per service; four
+resource constraints per node enforce CPU/RAM/bandwidth capacities. Individually
+ineligible assignments are omitted. Component costs match the Prolog formulas,
+including time in reserve, per-endpoint incidence weights, embodied allocation
+and functional-unit normalization. Structured inputs use the same numeric
+precision as generated Prolog facts.
 
-In controlled mode, service CPU requirements are sampled within 0.25–1.50 vCPU, sorted in
-increasing order; RAM requirements are sampled within 0.50–4 GB, sorted in
-decreasing order. This makes each service's CPU/RAM requirement vector
-incomparable with every other service's vector. Bandwidth and time-in-reserve
-remain independently sampled from their configured ranges. The incomparable
-vectors prevent a service from using another service's fit node. Dirty nodes
-can host multiple services subject to their resource and service-count limits.
+For the combined scope, each interacting service pair has a continuous unit
+flow on the directed arcs of the generated physical graph. At node n,
+outflow minus inflow equals x(source,n) minus x(target,n). Arc cost is expected
+GB per invocation times the selected emissions reference times distance/700.
+With integral endpoint assignments, the minimum flow cost is the shortest-path
+cost, exactly the routing model used in Prolog, up to floating-point rounding.
+Co-located endpoints need no flow. Link capacities are not added: the Prolog
+model constrains node bandwidth, not physical-link aggregate traffic.
+This formulation avoids service-pair × node-pair product variables.
 
-## Controlled infrastructure and known optimum
+`MILP_TIMEOUT_SECONDS = None` leaves SCIP without a time limit (default). A
+positive value sets a solve limit in seconds. A timed-out incumbent is never
+used as a certified optimum. Relative and absolute MIP gap limits are zero;
+feasibility tolerance, objective scaling and thread count are in `config.py`.
+An optimum is accepted only with solver status `OPTIMAL`; infeasibility and
+other statuses remain explicit failed baseline rows. Optimality is certified
+within the solver's numerical tolerances, not exact rational arithmetic.
+Every returned placement is validated and its four SCI contributions are
+recomputed by Prolog. MILP and Prolog objectives must agree within configured
+tolerances or the trial fails validation. Large instances may remain running
+or exhaust memory; there is no fallback to an unproven incumbent.
 
-Each service has a dedicated **fit** node with capacities equal to its requirements.
-Extra nodes are split approximately equally between dirty and broken nodes.
-Within each class, half are near and half far (rounded for odd counts).
-Broken nodes all use the green profile and have exactly one of CPU, RAM,
-inbound or outbound bandwidth zero; their other resources remain positive.
-Dirty capacities are the sum of the requirements of a randomly selected group
-of two or three services. `nodeServiceLimit/2` also enforces a maximum of two
-or three assigned services, independently of their individual sizes.
+## Grid and reference matching
 
-| Class | Power kW/vCPU | PUE | CI kgCO2eq/kWh | Location |
-|---|---:|---:|---:|---|
-| Fit | 0.0025–0.0045 | 1.05–1.25 | 0.03–0.20 | Near |
-| Broken | 0.0025–0.0045 | 1.05–1.25 | 0.03–0.20 | Half near, half far |
-| Dirty near | Calibrated Pmin–1.2 Pmin | 1.30–1.60 | 0.40–0.90 | Near |
-| Dirty far | Calibrated Pmin–1.2 Pmin | 1.30–1.60 | 0.40–0.90 | Far |
+Five seeds, seven application configurations, six infrastructure sizes and
+three fixed network scenarios produce 630 generated instances. With two route
+profiles there are 1,260 case configurations. Each has 14 heuristic/scope trials
+and two optimum trials (one per scope): **20,160 trials**, comprising 17,640
+heuristic runs and 2,520 baseline runs. `capacityonly` and `greenonly` use
+K=1/100/1000; `networkaware` uses four configured weight triples; SCI-greedy and
+local search run under both scopes. Network-aware and top-k run once under the
+combined scope. No exhaustive enumeration is part of the experimental grid.
 
-Near-to-near physical links sample 1–5 km. Any link incident to a far node
-samples 700–1,000 km, preventing a far node from acquiring a short bypass.
-A fit chain and one short attachment per extra near node ensure connectivity
-of the near subgraph. NetworkX still supplies the underlying topology.
+A baseline is solved once per full case/scope, independently of heuristic
+trials. The final Parquet joins successful certified baseline rows to matching
+heuristic rows, including seed, app topology/size, infrastructure topology,
+density/size, route profile/coefficient, network-embodied setting and scope.
+No baseline is inferred from the best heuristic. In partial results, missing
+or failed baseline references remain null. Gap/ratio are computed only for
+available references. Negative gaps beyond numerical tolerance are rejected.
+The two `optimal_components_*_sci` totals are separate scope-specific minima;
+the selected optimal SCI breakdown and placement always match the row's scope.
 
-Dirty power is deliberately artificial: compute the fit placement's network
-SCI using the largest reference intensity among the configured route profiles.
-For each service, compute its fit component SCI and the coefficient multiplying
-`power × PUE × CI` in the actual component SCI formula. Choose a common factor
-so a dirty placement's operational SCI alone exceeds 1.1 times the sum of that
-service's fit component SCI and the entire fit network SCI. All dirty nodes use the same brown profile, regardless of location. Divide
-this factor by the dirty profile's minimum PUE and CI to get Pmin (at least
-0.006 kW/vCPU); sample power over Pmin–1.2 Pmin.
+## Outputs and execution
 
-Every eligible move to a dirty node then costs more than even eliminating the
-entire network contribution. Fit nodes only accept their dedicated service and
-broken nodes are ineligible, so all-fit remains a global optimum for both scopes.
-This certificate uses no placement enumeration. It includes the component
-embodied term still present in Prolog; network embodied remains disabled by
-default. Power calibration is shared across peak/off-peak profiles to keep
-node attributes identical when comparing those profiles.
+Run `uv sync`, start Ray and run `uv run experiments`. Restart a pre-existing
+Ray cluster after updating the code. The new name `network-sci-milp-v1` keeps
+Ray state separate from earlier runs. Resume settings remain configurable.
+Generated Prolog inputs use trial-local temporary directories; debug inputs
+remain under `DEBUG_DIR`.
 
-All generated `node/6` and `route/4` fact lists are shuffled in Python with
-`rnd = random.Random(seed)` and `rnd.shuffle`, preserving predicate grouping.
-Controlled node identifiers are also assigned through a seeded shuffle.
-Inputs remain reproducible across heuristics and scopes.
+Final output: `results/parquets/network-sci-milp-v1/raw-sci-aware.parquet`.
+Rows retain all four measured SCI contributions, execution status, placement,
+reference values and gaps. Optimum rows also retain solver version/status,
+objective, bound, model/solve wall time, variable/constraint counts and search
+nodes. Heuristic `time` is Prolog CPU time; optimum `time` is model construction
+plus solver wall time. Do not interpret these clocks as identical measurements.
+The notebook uses this new experiment name and compares `optimum` with heuristics.
 
-The search space excludes infrastructure sizes smaller than the service count
-plus two nodes, ensuring room for at least one dirty and one broken node. With
-the current grid this leaves 540 application/infrastructure/seed scenarios.
-
-## Infrastructure topologies
-
-Infrastructure sizes are 16, 32, 64, 128, 256, and 512 nodes. Fixed
-topology-density pairs are ER-dense, BA-medium, and Internet-AS-sparse. Set
-`FIX_TOPOLOGY_DENSITY = False` to evaluate all nine combinations. NetworkX
-generates each graph; disconnected components are joined before the controlled
-link distances are assigned.
-
-The route profiles use the RENATER Montpellier reference coefficients:
-
-| Profile | Operational kgCO2eq/GB | Embodied kgCO2eq/GB |
-|---|---:|---:|
-| Peak | 0.000793 | 0.000493 |
-| Off-peak | 0.001400 | 0.000493 |
-
-Network embodied emissions are disabled by default. The configuration can
-enable them without changing the generated topology.
-
-## Placement heuristics and grid size
-
-The controlled grid includes `controlled` as the known-optimum baseline, `capacityonly(k)`
-and `greenonly(k)` for `k = 1, 100, 1000`, four `networkaware` weight settings,
-`scigreedy`, and `scilocalsearch`. Scope is varied for `controlled`,
-`scigreedy`, and `scilocalsearch`; other heuristics run once with
-`components_and_network`.
-
-There are 16 heuristic/scope configurations, two route profiles, and 540
-scenarios: **17,280 trials**. The `exhaustive` heuristic is not in this grid.
-
-## Results and debug
-
-Every successful controlled experiment stores the heuristic's four SCI components,
-the known-optimum SCI components, the optimal total for both scopes, and the known
-placement. The `optimal_sci` column selects the reference matching that trial's
-scope. Generated-instance statistics and execution status are also retained.
-Ray configuration fields are flattened into the final Parquet for filtering.
-
-The controlled grid writes to:
-
-`results/parquets/network-sci-controlled-v2/raw-sci-aware.parquet`
-
-The random grid writes to:
-
-`results/parquets/network-sci-random-v2/raw-sci-aware.parquet`
-
-Debug mode runs the single `DEBUG_CONFIG`; generated Prolog inputs remain in
-`debug-dir/`.
+OR-Tools MIP documentation: https://developers.google.com/optimization/mip/mip_example
