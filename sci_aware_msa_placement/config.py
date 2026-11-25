@@ -52,8 +52,8 @@ HEURISTICS = [
         f"networkaware({alpha},{beta},{gamma})"
         for alpha, beta, gamma in NETWORK_WEIGHTS
     ),
-    "scigreedy",
-    "scilocalsearch",
+    # "scigreedy",
+    # "scilocalsearch",
 ]
 SCOPES = ["components_only", "components_and_network"]
 SCOPE_DEPENDENT_HEURISTICS = {"optimum", "scigreedy", "scilocalsearch"}
@@ -210,7 +210,7 @@ LINK_DISTANCE_KM_RANGE = (5.0, 1000.0)
 
 # MILP baseline
 MILP_SOLVER = "SCIP"
-MILP_TIMEOUT_SECONDS = None  # None: unlimited; otherwise a positive number of seconds
+MILP_TIMEOUT_SECONDS = 1800  # None: unlimited; otherwise a positive number of seconds
 MILP_THREADS = 1
 MILP_OBJECTIVE_SCALE = 1_000_000_000.0
 MILP_SCIP_PARAMETERS = "limits/gap = 0\nlimits/absgap = 0\nnumerics/feastol = 1e-9"
