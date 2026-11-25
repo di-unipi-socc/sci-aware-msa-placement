@@ -14,6 +14,7 @@ PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 # Execution
 EXPERIMENT_NAME = "network-sci-milp-v1"
 RAY_ADDRESS = "auto"
+CPUS_PER_TRIAL = 4
 TIMEOUT_SECONDS = 1800
 ENCODING = "utf-8"
 RESUME_EXPERIMENT = True

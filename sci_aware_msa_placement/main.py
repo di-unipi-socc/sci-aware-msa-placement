@@ -157,17 +157,18 @@ def attach_optima(results: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_tuner() -> tune.Tuner:
+    trainable = tune.with_resources(run_experiment, {"cpu": config.CPUS_PER_TRIAL})
     experiment_path = config.OUTPUT_DIR / config.EXPERIMENT_NAME
     if config.RESUME_EXPERIMENT and tune.Tuner.can_restore(str(experiment_path)):
         return tune.Tuner.restore(
             str(experiment_path),
-            trainable=run_experiment,
+            trainable=trainable,
             resume_unfinished=config.RESUME_UNFINISHED_TRIALS,
             resume_errored=config.RESUME_ERRORED_TRIALS,
             restart_errored=config.RESTART_ERRORED_TRIALS,
         )
     return tune.Tuner(
-        run_experiment,
+        trainable,
         param_space=config.SEARCH_SPACE,
         run_config=RunConfig(
             name=config.EXPERIMENT_NAME,
