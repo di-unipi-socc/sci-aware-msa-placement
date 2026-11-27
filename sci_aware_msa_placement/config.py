@@ -12,9 +12,9 @@ PROLOG_DIR = PROJECT_ROOT / "prolog"
 PLACEMENT_PL = PROLOG_DIR / "placement.pl"
 
 # Execution
-EXPERIMENT_NAME = "network-sci-milp-v1"
+EXPERIMENT_NAME = "network-sci-heuristics-v1"
 RAY_ADDRESS = "auto"
-CPUS_PER_TRIAL = 4
+CPUS_PER_TRIAL = 1
 TIMEOUT_SECONDS = 1800
 ENCODING = "utf-8"
 RESUME_EXPERIMENT = True
@@ -46,12 +46,12 @@ NETWORK_WEIGHTS = [
     (0.20, 0.20, 0.60),
 ]
 HEURISTICS = [
-    "optimum",
+    # "optimum",
     *(f"capacityonly({k})" for k in TOP_K_VALUES),
     *(f"greenonly({k})" for k in TOP_K_VALUES),
     *(
-        f"networkaware({alpha},{beta},{gamma})"
-        for alpha, beta, gamma in NETWORK_WEIGHTS
+        f"networkaware({greenness},{capacity},{centrality})"
+        for greenness, capacity, centrality in NETWORK_WEIGHTS
     ),
     # "scigreedy",
     # "scilocalsearch",

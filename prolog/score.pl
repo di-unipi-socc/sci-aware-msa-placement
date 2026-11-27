@@ -100,11 +100,11 @@ nodeCount(NodeCount) :-
     findall(N, node(N,_,_,_,_,_), Nodes),
     length(Nodes, NodeCount).
 
-nodeScore(Alpha, Beta, Gamma, N, Score) :-
+nodeScore(Greenness, Capacity, Centrality, N, Score) :-
     greenScore(N, GreenScore),
     capacityScore(N, CapacityScore),
     centralityScore(N, CentralityScore),
-    Score is Alpha * GreenScore + Beta * CapacityScore + Gamma * CentralityScore.
+    Score is Greenness * GreenScore + Capacity * CapacityScore + Centrality * CentralityScore.
 
 normalizedLowerScore(Value, Values, Score) :-
     min_list(Values, Min), max_list(Values, Max),

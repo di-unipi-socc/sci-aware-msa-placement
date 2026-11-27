@@ -13,9 +13,9 @@ heuristicPlacement(greenonly(K), _, App, P) :-
     servicesByRequirement(App, Services),
     nodesByGreenness(Nodes),
     bestOfFirstKPlacements(K, App, Services, Nodes, P).
-heuristicPlacement(networkaware(Alpha,Beta,Gamma), _, App, P) :-
+heuristicPlacement(networkaware(Greenness,Capacity,Centrality), _, App, P) :-
     servicesByTraffic(App, Services),
-    nodesByCombinedScore(Alpha, Beta, Gamma, Nodes),
+    nodesByCombinedScore(Greenness, Capacity, Centrality, Nodes),
     once(eligiblePlacement(Services, Nodes, P)).
 heuristicPlacement(scigreedy, Scope, App, P) :-
     greedyPlacement(Scope, App, P).
@@ -50,8 +50,8 @@ nodesByGreenness(Nodes) :-
     sort(1, @=<, Candidates, Sorted),
     findall(N, member(candidate(_,N), Sorted), Nodes).
 
-nodesByCombinedScore(Alpha, Beta, Gamma, Nodes) :-
-    findall(candidate(Score,N), nodeScore(Alpha,Beta,Gamma,N,Score), Candidates),
+nodesByCombinedScore(Greenness, Capacity, Centrality, Nodes) :-
+    findall(candidate(Score,N), nodeScore(Greenness,Capacity,Centrality,N,Score), Candidates),
     sort(1, @=<, Candidates, Sorted),
     findall(N, member(candidate(_,N), Sorted), Nodes).
 
