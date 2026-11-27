@@ -59,7 +59,9 @@ def add_network_flows(solver, objective, assignments, application, network, para
     for probability, pairs, volumes in application["endpoints"]:
         for (source, target), volume in zip(pairs, volumes, strict=True):
             if source != target:
-                traffic[source, target] += probability * volume
+                # Routes are symmetric and have no shared link-capacity constraints.
+                pair = tuple(sorted((source, target)))
+                traffic[pair] += probability * volume
     profile = parameters["route_profile"]
     intensity = profile["operational_per_gb"]
     if parameters["include_network_embodied"]:
@@ -74,20 +76,22 @@ def add_network_flows(solver, objective, assignments, application, network, para
     for (source, target), volume in traffic.items():
         if volume == 0:
             continue
-        outgoing, incoming = defaultdict(list), defaultdict(list)
+        balances = {
+            node: solver.RowConstraint(0, 0, "") for node in network["nodes"]
+        }
+        for node, balance in balances.items():
+            source_assignment = assignments.get((source, node))
+            target_assignment = assignments.get((target, node))
+            if source_assignment is not None:
+                balance.SetCoefficient(source_assignment, -1)
+            if target_assignment is not None:
+                balance.SetCoefficient(target_assignment, 1)
         for index, (a, b, distance) in enumerate(arcs):
             flow = solver.NumVar(0, 1, f"f_{source}_{target}_{index}")
-            outgoing[a].append(flow)
-            incoming[b].append(flow)
+            balances[a].SetCoefficient(flow, 1)
+            balances[b].SetCoefficient(flow, -1)
             objective.SetCoefficient(
                 flow, config.MILP_OBJECTIVE_SCALE * volume * intensity * distance / 700
-            )
-        for node in network["nodes"]:
-            supply = assignments.get((source, node), 0) - assignments.get(
-                (target, node), 0
-            )
-            solver.Add(
-                solver.Sum(outgoing[node]) - solver.Sum(incoming[node]) == supply
             )
 
 
@@ -111,20 +115,20 @@ def solve_optimum(application, network, parameters):
     solver = create_solver()
     costs = component_costs(application, network["nodes"])
     assignments = {key: solver.BoolVar(f"x_{key[0]}_{key[1]}") for key in costs}
+    by_service, by_node = defaultdict(list), defaultdict(list)
+    for (service, node), variable in assignments.items():
+        by_service[service].append(variable)
+        by_node[node].append((application["requirements"][service], variable))
     for service in application["requirements"]:
-        solver.Add(
-            solver.Sum(var for (m, _), var in assignments.items() if m == service) == 1
-        )
+        constraint = solver.RowConstraint(1, 1, "")
+        for variable in by_service[service]:
+            constraint.SetCoefficient(variable, 1)
     for node, data in network["nodes"].items():
+        candidates = by_node[node]
         for resource, capacity in enumerate(data["resources"]):
-            solver.Add(
-                solver.Sum(
-                    application["requirements"][m][resource] * var
-                    for (m, n), var in assignments.items()
-                    if n == node
-                )
-                <= capacity
-            )
+            constraint = solver.RowConstraint(-solver.infinity(), capacity, "")
+            for requirements, variable in candidates:
+                constraint.SetCoefficient(variable, requirements[resource])
     objective = solver.Objective()
     for key, variable in assignments.items():
         objective.SetCoefficient(variable, costs[key] * config.MILP_OBJECTIVE_SCALE)
@@ -136,9 +140,7 @@ def solve_optimum(application, network, parameters):
         raise ValueError(f"Unknown scope: {parameters['scope']}")
     objective.SetMinimization()
     built = perf_counter()
-    status = (
-        solver.Solve()
-    )  # Deliberately no time limit, including for large instances.
+    status = solver.Solve()
     finished = perf_counter()
     status_names = {
         solver.OPTIMAL: "optimal",
